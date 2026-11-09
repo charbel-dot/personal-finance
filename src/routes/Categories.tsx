@@ -31,6 +31,16 @@ interface Stat {
   count: number;
 }
 
+/** Black or white, whichever reads better on a #rrggbb swatch (WCAG relative luminance). */
+function inkOn(hex: string): string {
+  const [r, g, b] = [1, 3, 5].map((i) => {
+    const v = parseInt(hex.slice(i, i + 2), 16) / 255;
+    return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  });
+  const l = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return l > 0.18 ? 'text-black' : 'text-white';
+}
+
 function slug(name: string, taken: Set<string>): string {
   const base =
     name
@@ -369,7 +379,7 @@ function CategoryForm({
                 className="sr-only"
                 aria-label={c}
               />
-              {color === c && <Check className="size-4 text-white" aria-hidden="true" />}
+              {color === c && <Check className={cn('size-4', inkOn(c))} aria-hidden="true" />}
             </label>
           ))}
           <label

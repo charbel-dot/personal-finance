@@ -211,8 +211,8 @@ function BottomLink({ to, label, icon: Icon }: { to: string; label: string; icon
       end={to === '/'}
       className={({ isActive }) =>
         cn(
-          'flex flex-col items-center justify-center gap-1 text-[11px] font-medium text-muted-foreground transition-colors outline-none',
-          'focus-visible:text-foreground',
+          'm-1 flex flex-col items-center justify-center gap-1 rounded-lg text-[11px] font-medium text-muted-foreground transition-colors outline-none',
+          'focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60',
           isActive && 'text-foreground',
         )
       }

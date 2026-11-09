@@ -106,7 +106,7 @@ export default function Account() {
         <Card className="lg:col-span-3">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              <KeyRound className="size-4 text-brand" aria-hidden="true" /> Change Password
+              <KeyRound className="size-4 text-brand-fg" aria-hidden="true" /> Change Password
             </CardTitle>
             <CardDescription>
               The password lives as a Cloudflare secret, never in the app. Changing it signs out every device.

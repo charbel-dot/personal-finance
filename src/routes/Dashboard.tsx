@@ -356,7 +356,7 @@ function SavingsCard({ analysis }: { analysis: BudgetAnalysis | null }) {
     <Card className="gap-5">
       <CardHeader>
         <div className="flex items-center gap-3">
-          <IconTile icon={PiggyBank} tone="var(--brand)" />
+          <IconTile icon={PiggyBank} tone="var(--brand-fg)" />
           <div className="min-w-0">
             <CardTitle className="text-base">Saved</CardTitle>
             <CardDescription>Share of income you kept</CardDescription>

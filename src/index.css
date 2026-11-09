@@ -39,6 +39,7 @@
   --color-expense: var(--expense);
   --color-expense-soft: var(--expense-soft);
   --color-brand: var(--brand);
+  --color-brand-fg: var(--brand-fg);
   --color-brand-ink: oklch(0.2 0.02 85);
   --color-warning: var(--warning);
 
@@ -73,12 +74,14 @@
   --input: oklch(0.89 0 0);
   --ring: oklch(0.55 0 0);
 
-  --income: oklch(0.55 0.15 152);
+  --income: oklch(0.5 0.14 152);
   --income-soft: oklch(0.96 0.04 152);
-  --expense: oklch(0.6 0.18 45);
+  --expense: oklch(0.53 0.17 45);
   --expense-soft: oklch(0.97 0.03 50);
   --brand: oklch(0.78 0.16 85);
-  --warning: oklch(0.6 0.14 75);
+  /* brand colour for icons/text on light surfaces (the yellow itself is ~2:1 on white) */
+  --brand-fg: oklch(0.55 0.13 80);
+  --warning: oklch(0.5 0.12 75);
 
   --chart-1: var(--income);
   --chart-2: var(--expense);
@@ -113,8 +116,9 @@
   --income: oklch(0.76 0.17 152);
   --income-soft: oklch(0.76 0.17 152 / 12%);
   --expense: oklch(0.74 0.16 50);
-  --expense-soft: oklch(0.74 0.16 50 / 12%);
+  --expense-soft: oklch(0.74 0.16 50 / 10%);
   --brand: oklch(0.86 0.17 92);
+  --brand-fg: oklch(0.86 0.17 92);
   --warning: oklch(0.8 0.15 80);
 
   --chart-1: var(--income);
@@ -172,6 +176,11 @@
   input,
   textarea {
     caret-color: var(--income);
+  }
+  /* No single-word last lines in running text. */
+  p,
+  li {
+    text-wrap: pretty;
   }
   /* 16px inputs stop iOS from zooming on focus */
   input,
@@ -275,8 +284,11 @@
   *,
   *::before,
   *::after {
+    /* Finish every animation at its end state, once: infinite pulses must not turn into flicker. */
     animation-duration: 1ms !important;
     animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
   }
 }

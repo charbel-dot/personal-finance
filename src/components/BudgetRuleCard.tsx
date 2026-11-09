@@ -74,7 +74,7 @@ export function BudgetRuleCard() {
         <CardDescription>How every income is divided between needs, wants and savings.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
-        <div className="flex items-start justify-between gap-4 rounded-lg border p-4">
+        <div className="flex items-start justify-between gap-4 border-b pb-5">
           <div>
             <Label htmlFor={switchId} className="text-sm font-medium">
               Auto-split income
@@ -85,6 +85,8 @@ export function BudgetRuleCard() {
             </p>
           </div>
           <Switch
+            className="mt-0.5"
+            size="lg"
             id={switchId}
             checked={settings.autoSplit}
             disabled={patch.isPending}
