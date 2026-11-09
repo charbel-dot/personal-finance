@@ -131,7 +131,7 @@ function DashboardHeader({
 }
 
 export default function Dashboard() {
-  const { categories, recurring } = useAppData();
+  const { categories, recurring, settings } = useAppData();
   const money = useMoney();
   const today = localToday();
   const [period, setPeriod] = useDashboardPeriod(today);
@@ -150,9 +150,17 @@ export default function Dashboard() {
     return {
       current: cur,
       previous: prev,
-      analysis: analyzeBudget({ current: cur, previous: prev, categories, recurring, periodDays, format: money }),
+      analysis: analyzeBudget({
+        current: cur,
+        previous: prev,
+        categories,
+        recurring,
+        periodDays,
+        format: money,
+        rule: settings.budgetRule,
+      }),
     };
-  }, [tx.data, curRange, prevRange, periodDays, categories, recurring, money]);
+  }, [tx.data, curRange, prevRange, periodDays, categories, recurring, money, settings.budgetRule]);
 
   const spentToday = (tx.data ?? [])
     .filter((t) => t.date === today && t.type === 'expense')
@@ -458,48 +466,111 @@ function TipsCard({ tips }: { tips: Insight[] }) {
 const GROUP_LABEL = { needs: 'Needs', wants: 'Wants', savings: 'Savings' } as const;
 
 function RuleCard({ analysis }: { analysis: BudgetAnalysis }) {
-  const money = useMoney();
+  const { settings } = useAppData();
+  const r = settings.budgetRule;
+  const split = settings.autoSplit;
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">50/30/20 Check</CardTitle>
-        <CardDescription>Needs, wants and savings as a share of income.</CardDescription>
+        <CardTitle className="text-base">
+          {split ? 'Budget Split' : 'Budget Check'}{' '}
+          <span className="tabular font-normal text-muted-foreground">
+            {r.needs}/{r.wants}/{r.savings}
+          </span>
+        </CardTitle>
+        <CardDescription>
+          {split
+            ? 'Your income, split into buckets: what’s left in each.'
+            : 'Needs, wants and savings as a share of income.'}
+        </CardDescription>
+        <CardAction>
+          <Button asChild variant="ghost" size="sm">
+            <Link to="/settings">Edit</Link>
+          </Button>
+        </CardAction>
       </CardHeader>
-      <CardContent className="space-y-5">
+      <CardContent className="stagger space-y-5">
         {analysis.totals.income === 0 ? (
-          <p className="text-sm text-muted-foreground">Add income for this period to compare with the rule.</p>
+          <p className="text-sm text-muted-foreground">Add income for this period to see your buckets.</p>
+        ) : split ? (
+          analysis.rule.map((b) => <SplitBucket key={b.group} bucket={b} income={analysis.totals.income} />)
         ) : (
-          analysis.rule.map((r) => {
-            const pct = Math.round(r.pct * 100);
-            const ok = r.group === 'savings' ? r.pct >= r.target : r.pct <= r.target;
-            return (
-              <div key={r.group} className="space-y-2">
-                <div className="flex items-baseline justify-between gap-2 text-sm">
-                  <span>
-                    <span className="font-medium">{GROUP_LABEL[r.group]}</span>
-                    <span className="text-muted-foreground"> · target {Math.round(r.target * 100)}%</span>
-                  </span>
-                  <span className={cn('tabular font-semibold', ok ? 'text-income' : 'text-expense')}>
-                    {pct}%{' '}
-                    <span className="font-normal text-muted-foreground">· {money(r.amount, { compact: true })}</span>
-                  </span>
-                </div>
-                <div className="relative h-2 rounded-full bg-muted" aria-hidden="true">
-                  <div
-                    className={cn('grow-x h-full rounded-full', ok ? 'bg-income' : 'bg-expense')}
-                    style={{ width: `${Math.min(100, pct)}%` }}
-                  />
-                  <span
-                    className="absolute -top-1 h-4 w-0.5 rounded-full bg-foreground/60"
-                    style={{ left: `${r.target * 100}%` }}
-                  />
-                </div>
-              </div>
-            );
-          })
+          analysis.rule.map((b) => <ShareBucket key={b.group} bucket={b} />)
         )}
       </CardContent>
     </Card>
+  );
+}
+
+type Bucket = BudgetAnalysis['rule'][number];
+
+/** Auto-split view: the bucket's share of income, what went out of it, and what is left. */
+function SplitBucket({ bucket, income }: { bucket: Bucket; income: number }) {
+  const money = useMoney();
+  const allocated = Math.round(income * bucket.target);
+  const used = bucket.amount;
+  const savings = bucket.group === 'savings';
+  const left = allocated - used;
+  const ratio = allocated > 0 ? used / allocated : 0;
+  const good = savings ? used >= allocated : used <= allocated;
+  return (
+    <div className="space-y-2">
+      <div className="flex items-baseline justify-between gap-2 text-sm">
+        <span>
+          <span className="font-medium">{GROUP_LABEL[bucket.group]}</span>
+          <span className="tabular text-muted-foreground"> · {money(allocated, { compact: true })}</span>
+        </span>
+        <span className={cn('tabular font-semibold', good ? 'text-income' : 'text-expense')}>
+          {savings
+            ? used >= allocated
+              ? `${money(used, { compact: true })} saved`
+              : `${money(allocated - used, { compact: true })} to go`
+            : left >= 0
+              ? `${money(left, { compact: true })} left`
+              : `${money(-left, { compact: true })} over`}
+        </span>
+      </div>
+      <div
+        className="h-2 overflow-hidden rounded-full bg-muted"
+        role="img"
+        aria-label={`${GROUP_LABEL[bucket.group]}: ${money(used)} of ${money(allocated)}`}
+      >
+        <div
+          className={cn('grow-x h-full rounded-full', good ? 'bg-income' : 'bg-expense')}
+          style={{ width: `${Math.min(100, ratio * 100)}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/** Classic view: each group as a share of income against its target. */
+function ShareBucket({ bucket }: { bucket: Bucket }) {
+  const money = useMoney();
+  const pct = Math.round(bucket.pct * 100);
+  const ok = bucket.group === 'savings' ? bucket.pct >= bucket.target : bucket.pct <= bucket.target;
+  return (
+    <div className="space-y-2">
+      <div className="flex items-baseline justify-between gap-2 text-sm">
+        <span>
+          <span className="font-medium">{GROUP_LABEL[bucket.group]}</span>
+          <span className="text-muted-foreground"> · target {Math.round(bucket.target * 100)}%</span>
+        </span>
+        <span className={cn('tabular font-semibold', ok ? 'text-income' : 'text-expense')}>
+          {pct}% <span className="font-normal text-muted-foreground">· {money(bucket.amount, { compact: true })}</span>
+        </span>
+      </div>
+      <div className="relative h-2 rounded-full bg-muted" aria-hidden="true">
+        <div
+          className={cn('grow-x h-full rounded-full', ok ? 'bg-income' : 'bg-expense')}
+          style={{ width: `${Math.min(100, pct)}%` }}
+        />
+        <span
+          className="absolute -top-1 h-4 w-0.5 rounded-full bg-foreground/60"
+          style={{ left: `${bucket.target * 100}%` }}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -554,7 +625,7 @@ function UpcomingCard({ today }: { today: string }) {
         ) : (
           <ul className="divide-y">
             {list.map(({ rule, date }) => {
-              const cat = categories.expense.find((c) => c.id === rule.categoryId);
+              const cat = categories[rule.type].find((c) => c.id === rule.categoryId);
               const inDays = daysBetween(today, date);
               const soon = inDays <= 3;
               return (
@@ -570,7 +641,7 @@ function UpcomingCard({ today }: { today: string }) {
                       {soon && (
                         <span className="inline-flex items-center gap-1 rounded-full bg-expense-soft px-1.5 py-0.5 text-[11px] font-medium text-expense">
                           <span className="size-1.5 animate-pulse rounded-full bg-expense" aria-hidden="true" />
-                          Due soon
+                          {rule.type === 'income' ? 'Arriving soon' : 'Due soon'}
                         </span>
                       )}
                     </p>
@@ -578,7 +649,10 @@ function UpcomingCard({ today }: { today: string }) {
                       {formatDate(date, today)} · {formatInDays(inDays)}
                     </p>
                   </div>
-                  <span className="tabular font-semibold">{money(rule.amount)}</span>
+                  <span className={cn('tabular font-semibold', rule.type === 'income' && 'text-income')}>
+                    {rule.type === 'income' ? '+' : ''}
+                    {money(rule.amount)}
+                  </span>
                 </li>
               );
             })}

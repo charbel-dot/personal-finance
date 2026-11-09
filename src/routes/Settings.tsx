@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import { useId, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { CURRENCIES, centsToInput } from '../../shared/money';
+import { BudgetRuleCard } from '@/components/BudgetRuleCard';
 import { Page, PageHeader } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -135,6 +136,8 @@ export default function Settings() {
             </Row>
           </CardContent>
         </Card>
+
+        <BudgetRuleCard />
 
         <Card>
           <CardHeader>

@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useConfirm } from '@/context/confirm';
 import { useUnsavedWarning } from '@/hooks/use-unsaved-warning';
-import { currencySymbol } from '@/lib/format';
+import { currencySymbol, useMoney } from '@/lib/format';
 import { useAppData, useDeleteTransaction, useSaveTransaction } from '@/lib/queries';
 import { localToday } from '@/lib/today';
 import { cn } from '@/lib/utils';
@@ -38,6 +38,7 @@ export function TransactionForm({ initialType, editing, onDone }: Props) {
   const save = useSaveTransaction();
   const remove = useDeleteTransaction();
   const confirm = useConfirm();
+  const money = useMoney();
   const ids = { amount: useId(), date: useId(), note: useId(), amountError: useId() };
 
   const [type, setType] = useState<TransactionType>(editing?.type ?? initialType);
@@ -81,7 +82,15 @@ export function TransactionForm({ initialType, editing, onDone }: Props) {
         original: editing,
         input: { type, amount: cents, categoryId, date, note: note.trim() || undefined },
       });
-      toast.success(editing ? 'Transaction updated' : type === 'income' ? 'Income added' : 'Expense added');
+      if (!editing && type === 'income' && settings.autoSplit) {
+        const r = settings.budgetRule;
+        const part = (pct: number) => money(Math.round((cents * pct) / 100));
+        toast.success('Income added and split', {
+          description: `${part(r.needs)} needs · ${part(r.wants)} wants · ${part(r.savings)} savings`,
+        });
+      } else {
+        toast.success(editing ? 'Transaction updated' : type === 'income' ? 'Income added' : 'Expense added');
+      }
       onDone();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Couldn’t save. Check your connection and try again.');
@@ -208,7 +217,7 @@ function focusFirstError(errors: Errors, ids: { amount: string; date: string }, 
   else if (errors.date) document.getElementById(ids.date)?.focus();
 }
 
-function TypeSwitch({ value, onChange }: { value: TransactionType; onChange: (t: TransactionType) => void }) {
+export function TypeSwitch({ value, onChange }: { value: TransactionType; onChange: (t: TransactionType) => void }) {
   return (
     <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1" role="group" aria-label="Transaction type">
       {TYPES.map(({ value: v, label, icon: Icon }) => (

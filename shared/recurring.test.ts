@@ -15,6 +15,7 @@ const NOW = '2026-11-09T12:00:00.000Z';
 function rule(overrides: Partial<Recurring> = {}): Recurring {
   return {
     id: 'r1',
+    type: 'expense',
     name: 'Rent',
     amount: 120000,
     categoryId: 'housing',
@@ -144,5 +145,17 @@ describe('monthlyEquivalent', () => {
     expect(monthlyEquivalent(1000, 'weekly')).toBe(4333);
     expect(monthlyEquivalent(1000, 'monthly')).toBe(1000);
     expect(monthlyEquivalent(12000, 'yearly')).toBe(1000);
+  });
+});
+
+describe('recurring income', () => {
+  it('generates income transactions for income rules', () => {
+    const { transactions } = generateDue(
+      [rule({ id: 'sal', type: 'income', name: 'Salary', categoryId: 'salary', startDate: '2026-11-01' })],
+      '2026-11-09',
+      NOW,
+    );
+    expect(transactions).toHaveLength(1);
+    expect(transactions[0]).toMatchObject({ type: 'income', categoryId: 'salary', amount: 120000 });
   });
 });

@@ -218,7 +218,7 @@ async function todayFor(bucket: R2Bucket): Promise<string> {
 }
 
 export async function createRecurring(bucket: R2Bucket, input: RecurringInput): Promise<Recurring> {
-  await assertCategory(bucket, 'expense', input.categoryId);
+  await assertCategory(bucket, input.type, input.categoryId);
   const today = await todayFor(bucket);
   const now = nowIso();
   const rule: Recurring = {
@@ -237,7 +237,7 @@ export async function createRecurring(bucket: R2Bucket, input: RecurringInput): 
 }
 
 export async function updateRecurring(bucket: R2Bucket, id: string, input: RecurringInput): Promise<Recurring> {
-  await assertCategory(bucket, 'expense', input.categoryId);
+  await assertCategory(bucket, input.type, input.categoryId);
   const today = await todayFor(bucket);
   const { result } = await updateJson(bucket, KEYS.recurring, recurringDoc, emptyRecurring, (current) => {
     const existing = current.items.find((r) => r.id === id);

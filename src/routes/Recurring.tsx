@@ -1,14 +1,15 @@
 import { CalendarClock, Loader2, MoreHorizontal, Pause, Pencil, Play, Plus, Repeat, Trash2 } from 'lucide-react';
-import { useId, useState, type CSSProperties, type SyntheticEvent } from 'react';
+import { useId, useState, type CSSProperties, type ReactNode, type SyntheticEvent } from 'react';
 import { toast } from 'sonner';
 import { isValidIsoDate } from '../../shared/dates';
 import { centsToInput, parseAmount } from '../../shared/money';
 import { monthlyEquivalent, nextDueDate } from '../../shared/recurring';
-import type { Frequency, Recurring as Rule, RecurringInput } from '../../shared/schema';
+import type { Category, Frequency, Recurring as Rule, RecurringInput, TransactionType } from '../../shared/schema';
 import { CategoryPicker } from '@/components/CategoryPicker';
 import { EmptyState } from '@/components/Feedback';
 import { Page, PageHeader } from '@/components/Layout';
 import { ResponsiveSheet, SheetFooter } from '@/components/ResponsiveSheet';
+import { TypeSwitch } from '@/components/TransactionForm';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -32,6 +33,7 @@ const FREQ_LABEL: Record<Frequency, string> = { weekly: 'Weekly', monthly: 'Mont
 
 function toInput(rule: Rule, patch: Partial<RecurringInput> = {}): RecurringInput {
   return {
+    type: rule.type,
     name: rule.name,
     amount: rule.amount,
     categoryId: rule.categoryId,
@@ -51,7 +53,10 @@ export default function Recurring() {
   const openSheet = (rule?: Rule) => setSheet({ open: true, rule, nonce: Date.now() });
 
   const active = recurring.filter((r) => !r.paused);
-  const monthly = active.reduce((acc, r) => acc + monthlyEquivalent(r.amount, r.frequency), 0);
+  const perMonth = (type: TransactionType) =>
+    active.filter((r) => r.type === type).reduce((acc, r) => acc + monthlyEquivalent(r.amount, r.frequency), 0);
+  const bills = perMonth('expense');
+  const income = perMonth('income');
   const sorted = [...recurring].sort(
     (a, b) => Number(a.paused) - Number(b.paused) || nextDueDate(a, today).localeCompare(nextDueDate(b, today)),
   );
@@ -61,7 +66,7 @@ export default function Recurring() {
     <Page>
       <PageHeader
         title="Recurring"
-        subtitle="Bills and subscriptions that log themselves when due."
+        subtitle="Bills, subscriptions and income that log themselves when due."
         actions={
           <Button className="press" onClick={() => openSheet()}>
             <Plus aria-hidden="true" /> New Recurring
@@ -73,22 +78,20 @@ export default function Recurring() {
         <Card className="py-5">
           <CardContent className="grid grid-cols-2 gap-5 lg:grid-cols-3">
             <div>
-              <p className="text-sm text-muted-foreground">Committed each month</p>
-              <p className="tabular mt-1 text-3xl font-bold tracking-tight">{money(monthly)}</p>
+              <p className="text-sm text-muted-foreground">Bills each month</p>
+              <p className="tabular mt-1 text-2xl font-bold tracking-tight sm:text-3xl">{money(bills)}</p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Active</p>
-              <p className="tabular mt-1 text-3xl font-bold tracking-tight">
-                {active.length}
-                <span className="ml-2 text-sm font-normal text-muted-foreground">
-                  {recurring.length - active.length} paused
-                </span>
-              </p>
+              <p className="text-sm text-muted-foreground">Income each month</p>
+              <p className="tabular mt-1 text-2xl font-bold tracking-tight text-income sm:text-3xl">{money(income)}</p>
             </div>
             <div className="col-span-2 lg:col-span-1">
               <p className="text-sm text-muted-foreground">Next due</p>
               <p className="mt-1 truncate text-lg font-semibold">
                 {next ? `${next.name} · ${formatDate(nextDueDate(next, today), today)}` : '—'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {active.length} active · {recurring.length - active.length} paused
               </p>
             </div>
           </CardContent>
@@ -98,18 +101,18 @@ export default function Recurring() {
           {sorted.length === 0 ? (
             <EmptyState
               icon={Repeat}
-              title="No Recurring Expenses Yet"
+              title="Nothing Recurring Yet"
               action={<Button onClick={() => openSheet()}>Add Your First</Button>}
             >
-              Rent, subscriptions and bills are added to your history automatically on each due date.
+              Add your salary, rent and subscriptions once. They’re logged automatically on every due date.
             </EmptyState>
           ) : (
-            <ul className="divide-y" aria-label="Recurring expenses">
+            <ul className="divide-y" aria-label="Recurring items">
               {sorted.map((rule) => (
                 <RuleRow
                   key={rule.id}
                   rule={rule}
-                  color={categories.expense.find((c) => c.id === rule.categoryId)?.color}
+                  color={categories[rule.type].find((c) => c.id === rule.categoryId)?.color}
                   today={today}
                   onEdit={() => openSheet(rule)}
                 />
@@ -123,7 +126,13 @@ export default function Recurring() {
       <ResponsiveSheet
         open={sheet.open}
         onClose={() => setSheet((s) => ({ ...s, open: false }))}
-        title={sheet.rule ? 'Edit Recurring Expense' : 'New Recurring Expense'}
+        title={
+          sheet.rule
+            ? sheet.rule.type === 'income'
+              ? 'Edit Recurring Income'
+              : 'Edit Recurring Expense'
+            : 'New Recurring'
+        }
       >
         <RecurringForm key={sheet.nonce} rule={sheet.rule} onDone={() => setSheet((s) => ({ ...s, open: false }))} />
       </ResponsiveSheet>
@@ -156,7 +165,7 @@ function RuleRow({ rule, color, today, onEdit }: { rule: Rule; color?: string; t
     if (!ok) return;
     try {
       await remove.mutateAsync(rule.id);
-      toast.success('Recurring expense deleted');
+      toast.success(`${rule.name} deleted`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Couldn’t delete. Check your connection and try again.');
     }
@@ -185,7 +194,10 @@ function RuleRow({ rule, color, today, onEdit }: { rule: Rule; color?: string; t
           {!rule.paused && ` · next ${formatDate(nextDueDate(rule, today), today)}`}
         </span>
       </button>
-      <span className="tabular shrink-0 font-semibold">{money(rule.amount)}</span>
+      <span className={cn('tabular shrink-0 font-semibold', rule.type === 'income' && 'text-income')}>
+        {rule.type === 'income' ? '+' : ''}
+        {money(rule.amount)}
+      </span>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon" className="size-10" aria-label={`Actions for ${rule.name}`}>
@@ -209,17 +221,47 @@ function RuleRow({ rule, color, today, onEdit }: { rule: Rule; color?: string; t
   );
 }
 
+function initialCategory(rule: Rule | undefined, type: TransactionType, list: Category[], preferred: string) {
+  if (rule?.type === type) return rule.categoryId;
+  return (list.find((c) => c.id === preferred) ?? list.at(0))?.id ?? '';
+}
+
+function validateRule(v: {
+  name: string;
+  cents: number | null;
+  categoryId: string;
+  startDate: string;
+  type: TransactionType;
+}): Record<string, string> {
+  const next: Record<string, string> = {};
+  if (!v.name.trim()) next.name = 'Give it a name';
+  if (v.cents === null) next.amount = 'Enter an amount greater than zero';
+  if (!v.categoryId) next.categoryId = v.type === 'income' ? 'Pick a source' : 'Pick a category';
+  if (!isValidIsoDate(v.startDate)) next.startDate = 'Pick a valid date';
+  return next;
+}
+
+/** Move focus to the first field that needs fixing. */
+function focusFirstError(errors: Record<string, string>, ids: { name: string; amount: string; start: string }) {
+  const first = errors.name ? ids.name : errors.amount ? ids.amount : errors.startDate ? ids.start : null;
+  if (first) document.getElementById(first)?.focus();
+  else document.querySelector<HTMLInputElement>('input[name="recurring-category"]')?.focus();
+}
+
 function RecurringForm({ rule, onDone }: { rule?: Rule; onDone: () => void }) {
   const { categories, settings } = useAppData();
   const save = useSaveRecurring();
   const ids = { name: useId(), amount: useId(), freq: useId(), start: useId(), note: useId() };
-  const expenseCats = categories.expense.filter((c) => !c.archived || c.id === rule?.categoryId);
+  const [type, setType] = useState<TransactionType>(rule?.type ?? 'expense');
+  const cats = (t: TransactionType) => categories[t].filter((c) => !c.archived || c.id === rule?.categoryId);
 
   const [name, setName] = useState(rule?.name ?? '');
   const [amount, setAmount] = useState(rule ? centsToInput(rule.amount) : '');
-  const [categoryId, setCategoryId] = useState(
-    rule?.categoryId ?? expenseCats.find((c) => c.id === 'subscriptions')?.id ?? expenseCats.at(0)?.id ?? '',
-  );
+  const [categoryByType, setCategoryByType] = useState<Record<TransactionType, string>>(() => ({
+    expense: initialCategory(rule, 'expense', cats('expense'), 'subscriptions'),
+    income: initialCategory(rule, 'income', cats('income'), 'salary'),
+  }));
+  const categoryId = categoryByType[type];
   const [frequency, setFrequency] = useState<Frequency>(rule?.frequency ?? 'monthly');
   const [startDate, setStartDate] = useState(rule?.startDate ?? localToday());
   const [note, setNote] = useState(rule?.note ?? '');
@@ -228,22 +270,17 @@ function RecurringForm({ rule, onDone }: { rule?: Rule; onDone: () => void }) {
   async function onSubmit(e: SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     const cents = parseAmount(amount);
-    const next: Record<string, string> = {};
-    if (!name.trim()) next.name = 'Give it a name';
-    if (cents === null) next.amount = 'Enter an amount greater than zero';
-    if (!categoryId) next.categoryId = 'Pick a category';
-    if (!isValidIsoDate(startDate)) next.startDate = 'Pick a valid date';
+    const next = validateRule({ name, cents, categoryId, startDate, type });
     setErrors(next);
-    if (Object.keys(next).length > 0 || cents === null) {
-      const first = next.name ? ids.name : next.amount ? ids.amount : next.startDate ? ids.start : null;
-      if (first) document.getElementById(first)?.focus();
-      else document.querySelector<HTMLInputElement>('input[name="recurring-category"]')?.focus();
+    if (cents === null || Object.keys(next).length > 0) {
+      focusFirstError(next, ids);
       return;
     }
     try {
       await save.mutateAsync({
         id: rule?.id,
         input: {
+          type,
           name: name.trim(),
           amount: cents,
           categoryId,
@@ -253,22 +290,23 @@ function RecurringForm({ rule, onDone }: { rule?: Rule; onDone: () => void }) {
           paused: rule?.paused ?? false,
         },
       });
-      toast.success(rule ? 'Recurring expense updated' : 'Recurring expense added');
+      toast.success(rule ? `${name.trim()} updated` : `${name.trim()} added. It logs itself on every due date.`);
       onDone();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Couldn’t save. Check your connection and try again.');
     }
   }
 
+  const copy = COPY[type];
   return (
     <form className="space-y-5 pt-1" onSubmit={(e) => void onSubmit(e)} noValidate>
-      <div className="space-y-2">
-        <Label htmlFor={ids.name}>Name</Label>
+      <TypeSwitch value={type} onChange={setType} />
+      <Field id={ids.name} label="Name" error={errors.name}>
         <Input
           id={ids.name}
           value={name}
           maxLength={60}
-          placeholder="e.g. Rent, Netflix…"
+          placeholder={copy.placeholder}
           name="name"
           autoComplete="off"
           data-autofocus={rule ? undefined : true}
@@ -276,11 +314,9 @@ function RecurringForm({ rule, onDone }: { rule?: Rule; onDone: () => void }) {
           onChange={(e) => setName(e.target.value)}
           className="h-11"
         />
-        {errors.name && <p className="text-sm text-destructive">{errors.name}</p>}
-      </div>
+      </Field>
       <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-2">
-          <Label htmlFor={ids.amount}>Amount ({currencySymbol(settings.currency)})</Label>
+        <Field id={ids.amount} label={`Amount (${currencySymbol(settings.currency)})`} error={errors.amount}>
           <Input
             id={ids.amount}
             className="tabular h-11"
@@ -293,10 +329,8 @@ function RecurringForm({ rule, onDone }: { rule?: Rule; onDone: () => void }) {
             aria-invalid={Boolean(errors.amount)}
             onChange={(e) => setAmount(e.target.value.replace(/[^\d.,]/g, ''))}
           />
-          {errors.amount && <p className="text-sm text-destructive">{errors.amount}</p>}
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor={ids.freq}>Repeats</Label>
+        </Field>
+        <Field id={ids.freq} label="Repeats">
           <Select value={frequency} onValueChange={(v) => setFrequency(v as Frequency)}>
             <SelectTrigger id={ids.freq} className="h-11 w-full">
               <SelectValue />
@@ -307,19 +341,18 @@ function RecurringForm({ rule, onDone }: { rule?: Rule; onDone: () => void }) {
               <SelectItem value="yearly">Yearly</SelectItem>
             </SelectContent>
           </Select>
-        </div>
+        </Field>
       </div>
       <CategoryPicker
         name="recurring-category"
-        legend="Category"
-        categories={expenseCats}
+        legend={copy.legend}
+        categories={cats(type)}
         value={categoryId}
-        onChange={setCategoryId}
+        onChange={(id) => setCategoryByType((prev) => ({ ...prev, [type]: id }))}
         error={errors.categoryId}
       />
       <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-        <div className="space-y-2">
-          <Label htmlFor={ids.start}>Start date</Label>
+        <Field id={ids.start} label="Start date" error={errors.startDate}>
           <Input
             id={ids.start}
             type="date"
@@ -330,20 +363,19 @@ function RecurringForm({ rule, onDone }: { rule?: Rule; onDone: () => void }) {
             onChange={(e) => setStartDate(e.target.value)}
             className="h-11"
           />
-          {errors.startDate && <p className="text-sm text-destructive">{errors.startDate}</p>}
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor={ids.note}>
-            Note <span className="font-normal text-muted-foreground">(optional)</span>
-          </Label>
+        </Field>
+        <Field id={ids.note} label="Note (optional)">
           <Input
             id={ids.note}
+            name="note"
+            autoComplete="off"
+            placeholder="e.g. Paid by card…"
             maxLength={280}
             value={note}
             onChange={(e) => setNote(e.target.value)}
             className="h-11"
           />
-        </div>
+        </Field>
       </div>
       <p className="text-xs text-muted-foreground">
         Added automatically on each due date. Dates before this month aren’t back-filled.
@@ -351,9 +383,24 @@ function RecurringForm({ rule, onDone }: { rule?: Rule; onDone: () => void }) {
       <SheetFooter>
         <Button type="submit" className="press h-11 flex-1 text-base" disabled={save.isPending}>
           {save.isPending && <Loader2 className="animate-spin" aria-hidden="true" />}
-          {rule ? 'Save Changes' : 'Add Recurring Expense'}
+          {rule ? 'Save Changes' : copy.submit}
         </Button>
       </SheetFooter>
     </form>
+  );
+}
+
+const COPY: Record<TransactionType, { placeholder: string; legend: string; submit: string }> = {
+  expense: { placeholder: 'e.g. Rent, Netflix…', legend: 'Category', submit: 'Add Recurring Expense' },
+  income: { placeholder: 'e.g. Salary, Rent from flat…', legend: 'Source', submit: 'Add Recurring Income' },
+};
+
+function Field({ id, label, error, children }: { id: string; label: string; error?: string; children: ReactNode }) {
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>{label}</Label>
+      {children}
+      {error && <p className="text-sm text-destructive">{error}</p>}
+    </div>
   );
 }

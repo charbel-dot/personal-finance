@@ -76,7 +76,7 @@ export function generateDue(rules: Recurring[], today: string, nowIso: string): 
       for (const date of due) {
         transactions.push({
           id: recurringTransactionId(rule.id, date),
-          type: 'expense',
+          type: rule.type,
           amount: rule.amount,
           categoryId: rule.categoryId,
           date,

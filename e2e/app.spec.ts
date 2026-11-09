@@ -85,13 +85,13 @@ test('recurring: create, pause, resume and delete', async ({ page }) => {
   await login(page);
   await page.getByRole('link', { name: 'Recurring' }).click();
   await page.getByRole('button', { name: 'New Recurring' }).click();
-  const sheet = page.getByRole('dialog', { name: 'New Recurring Expense' });
+  const sheet = page.getByRole('dialog', { name: 'New Recurring' });
   await sheet.getByRole('button', { name: 'Add Recurring Expense' }).click();
   await expect(sheet.getByText('Give it a name')).toBeVisible();
   await sheet.getByLabel('Name').fill('Gym');
   await sheet.getByLabel(/Amount/).fill('39.90');
   await sheet.getByRole('button', { name: 'Add Recurring Expense' }).click();
-  await expect(page.getByText('Recurring expense added')).toBeVisible();
+  await expect(page.getByText(/Gym added/)).toBeVisible();
 
   await page.getByRole('button', { name: 'Actions for Gym' }).click();
   await page.getByRole('menuitem', { name: 'Pause' }).click();
@@ -105,7 +105,7 @@ test('recurring: create, pause, resume and delete', async ({ page }) => {
   await page.getByRole('button', { name: 'Actions for Gym' }).click();
   await page.getByRole('menuitem', { name: 'Delete' }).click();
   await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
-  await expect(page.getByText('Recurring expense deleted')).toBeVisible();
+  await expect(page.getByText('Gym deleted')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Edit Gym' })).toHaveCount(0);
 });
 
@@ -165,4 +165,29 @@ test('account shows the user and exports data', async ({ page }) => {
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export CSV' }).click();
   expect((await download).suggestedFilename()).toMatch(/^money-\d{4}-\d{2}-\d{2}\.csv$/);
+});
+
+test('recurring income and a custom budget rule', async ({ page }) => {
+  await login(page);
+  await page.getByRole('link', { name: 'Recurring' }).click();
+  await page.getByRole('button', { name: 'New Recurring' }).click();
+  const sheet = page.getByRole('dialog', { name: 'New Recurring' });
+  await sheet.getByRole('button', { name: 'Income' }).click();
+  await sheet.getByLabel('Name').fill('Salary');
+  await sheet.getByLabel(/Amount/).fill('3000');
+  await sheet.getByRole('button', { name: 'Add Recurring Income' }).click();
+  await expect(page.getByText(/Salary added/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Edit Salary' })).toBeVisible();
+
+  await page.getByRole('link', { name: 'Settings' }).click();
+  await page.getByLabel('Needs').fill('60');
+  await expect(page.getByText(/Total 110%/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Save Rule' })).toBeDisabled();
+  await page.getByLabel('Wants').fill('20');
+  await expect(page.getByText('Total 100%')).toBeVisible();
+  await page.getByRole('button', { name: 'Save Rule' }).click();
+  await expect(page.getByText('Budget rule set to 60/20/20')).toBeVisible();
+
+  await page.getByRole('link', { name: 'Home' }).click();
+  await expect(page.getByRole('heading', { name: /Budget Split 60\/20\/20/ })).toBeVisible();
 });

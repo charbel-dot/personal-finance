@@ -22,7 +22,7 @@
     "icons": "node scripts/generate-icons.mjs",
     "doctor": "npx -y react-doctor@latest .",
     "deploy": "npm run build && wrangler pages deploy dist --project-name money-app --branch main && npm run deploy:cron",
-    "deploy:cron": "wrangler deploy --config cron/wrangler.toml",
+    "deploy:cron": "wrangler deploy --config cron/wrangler.toml --env=\"\"",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm run test && npm run build"
   },
   "dependencies": {

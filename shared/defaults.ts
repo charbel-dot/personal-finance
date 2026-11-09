@@ -1,4 +1,4 @@
-import type { CategoriesDoc, Settings } from './schema';
+import { DEFAULT_BUDGET_RULE, type CategoriesDoc, type Settings } from './schema';
 
 export const DEFAULT_CATEGORIES: CategoriesDoc = {
   expense: [
@@ -26,6 +26,8 @@ export const DEFAULT_SETTINGS: Settings = {
   currency: 'USD',
   timezone: 'UTC',
   openingBalance: 0,
+  budgetRule: DEFAULT_BUDGET_RULE,
+  autoSplit: true,
 };
 
 export const CATEGORY_COLORS = [

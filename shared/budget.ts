@@ -1,7 +1,13 @@
 import { monthlyEquivalent } from './recurring';
-import type { BudgetGroup, CategoriesDoc, Category, Recurring, Transaction } from './schema';
+import type { BudgetGroup, BudgetRule, CategoriesDoc, Category, Recurring, Transaction } from './schema';
 
-export const RULE_TARGETS: Record<BudgetGroup, number> = { needs: 0.5, wants: 0.3, savings: 0.2 };
+export type Targets = Record<BudgetGroup, number>;
+export const RULE_TARGETS: Targets = { needs: 0.5, wants: 0.3, savings: 0.2 };
+
+/** Whole-percent rule from settings → fractions. */
+export function toTargets(rule: BudgetRule | undefined): Targets {
+  return rule ? { needs: rule.needs / 100, wants: rule.wants / 100, savings: rule.savings / 100 } : RULE_TARGETS;
+}
 const AVG_DAYS_PER_MONTH = 30.44;
 
 export interface Slice {
@@ -61,6 +67,8 @@ export interface AnalysisInput {
   periodDays: number;
   /** Formats cents for human-readable messages. */
   format: (cents: number) => string;
+  /** The user's budget rule (defaults to 50/30/20). */
+  rule?: BudgetRule;
 }
 
 const sum = (items: Transaction[]) => items.reduce((acc, t) => acc + t.amount, 0);
@@ -106,16 +114,19 @@ const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(mi
  * - needs ≤ 50% → classic 20%, or a 5% stretch above an already-good rate (max 40%)
  * - needs > 50% → whatever is left after needs and a lean 25% for wants, never below 5%
  */
-export function suggestSavingsPct(needsPct: number, currentSavingsRate: number): number {
-  if (needsPct <= RULE_TARGETS.needs) {
-    if (currentSavingsRate >= RULE_TARGETS.savings) return clamp(roundTo5(currentSavingsRate + 0.05, 'down'), 0.2, 0.4);
-    return RULE_TARGETS.savings;
+export function suggestSavingsPct(needsPct: number, currentSavingsRate: number, t: Targets = RULE_TARGETS): number {
+  const lean = Math.max(0.1, 1 - t.needs - t.savings - 0.05); // a lean wants allowance when needs run high
+  if (needsPct <= t.needs) {
+    if (currentSavingsRate >= t.savings)
+      return clamp(roundTo5(currentSavingsRate + 0.05, 'down'), t.savings, Math.max(0.4, t.savings));
+    return t.savings;
   }
-  return clamp(roundTo5(1 - needsPct - 0.25, 'down'), 0.05, RULE_TARGETS.savings);
+  return clamp(roundTo5(1 - needsPct - lean, 'down'), 0.05, t.savings);
 }
 
 export function analyzeBudget(input: AnalysisInput): BudgetAnalysis {
   const { current, previous, categories, recurring, periodDays, format } = input;
+  const t = toTargets(input.rule);
   const totals = computeTotals(current, categories);
   const expenses = current.filter((t) => t.type === 'expense');
   const incomes = current.filter((t) => t.type === 'income');
@@ -127,12 +138,12 @@ export function analyzeBudget(input: AnalysisInput): BudgetAnalysis {
   const pct = (n: number) => (totals.income > 0 ? n / totals.income : 0);
 
   const rule: RuleBucket[] = [
-    { group: 'needs', amount: needs, pct: pct(needs), target: RULE_TARGETS.needs },
-    { group: 'wants', amount: wants, pct: pct(wants), target: RULE_TARGETS.wants },
-    { group: 'savings', amount: savedAmount, pct: pct(savedAmount), target: RULE_TARGETS.savings },
+    { group: 'needs', amount: needs, pct: pct(needs), target: t.needs },
+    { group: 'wants', amount: wants, pct: pct(wants), target: t.wants },
+    { group: 'savings', amount: savedAmount, pct: pct(savedAmount), target: t.savings },
   ];
 
-  const suggestedSavingsPct = suggestSavingsPct(pct(needs), totals.savingsRate);
+  const suggestedSavingsPct = suggestSavingsPct(pct(needs), totals.savingsRate, t);
   // A calendar month (28–31 days) is already monthly; other ranges are normalised to an average month.
   const isMonth = periodDays >= 28 && periodDays <= 31;
   const monthlyIncome = isMonth
@@ -143,7 +154,7 @@ export function analyzeBudget(input: AnalysisInput): BudgetAnalysis {
   const suggestedSavingsAmount = Math.round(monthlyIncome * suggestedSavingsPct);
 
   const recurringMonthly = recurring
-    .filter((r) => !r.paused)
+    .filter((r) => !r.paused && r.type === 'expense')
     .reduce((acc, r) => acc + monthlyEquivalent(r.amount, r.frequency), 0);
   const recurringPctOfIncome = monthlyIncome > 0 ? recurringMonthly / monthlyIncome : 0;
 
@@ -174,24 +185,24 @@ export function analyzeBudget(input: AnalysisInput): BudgetAnalysis {
     });
   }
 
-  if (hasIncome && pct(needs) > RULE_TARGETS.needs) {
+  if (hasIncome && pct(needs) > t.needs) {
     insights.push({
       id: 'needs-high',
       severity: pct(needs) > 0.65 ? 'high' : 'medium',
-      title: `Needs take ${Math.round(pct(needs) * 100)}% of income (target 50%)`,
+      title: `Needs take ${Math.round(pct(needs) * 100)}% of income (target ${Math.round(t.needs * 100)}%)`,
       detail: 'Fixed costs are the biggest lever long-term: review housing, insurance and utility plans.',
-      weight: pct(needs) - RULE_TARGETS.needs,
+      weight: pct(needs) - t.needs,
     });
   }
 
-  if (hasIncome && pct(wants) > RULE_TARGETS.wants) {
-    const over = wants - Math.round(totals.income * RULE_TARGETS.wants);
+  if (hasIncome && pct(wants) > t.wants) {
+    const over = wants - Math.round(totals.income * t.wants);
     insights.push({
       id: 'wants-high',
       severity: 'medium',
-      title: `Wants are ${Math.round(pct(wants) * 100)}% of income (target 30%)`,
-      detail: `Trimming ${format(over)} from wants this period gets you back to 30%.`,
-      weight: pct(wants) - RULE_TARGETS.wants,
+      title: `Wants are ${Math.round(pct(wants) * 100)}% of income (target ${Math.round(t.wants * 100)}%)`,
+      detail: `Trimming ${format(over)} from wants this period gets you back to ${Math.round(t.wants * 100)}%.`,
+      weight: pct(wants) - t.wants,
     });
   }
 
@@ -204,7 +215,7 @@ export function analyzeBudget(input: AnalysisInput): BudgetAnalysis {
       detail: `You're saving ${Math.round(Math.max(0, totals.savingsRate) * 100)}% now. Move ${format(gap)} to savings right after payday so it's not spent.`,
       weight: suggestedSavingsPct - totals.savingsRate,
     });
-  } else if (hasIncome && totals.savingsRate >= RULE_TARGETS.savings) {
+  } else if (hasIncome && totals.savingsRate >= t.savings) {
     insights.push({
       id: 'savings-good',
       severity: 'positive',

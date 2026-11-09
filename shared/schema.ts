@@ -87,6 +87,8 @@ export const frequency = z.enum(['weekly', 'monthly', 'yearly']);
 export type Frequency = z.infer<typeof frequency>;
 
 export const recurringInput = z.object({
+  /** Recurring income (e.g. salary) or a recurring expense. Older rules without it are expenses. */
+  type: transactionType.default('expense'),
   name: z.string().trim().min(1, 'Name is required').max(60, 'Name is too long'),
   amount: amountCents,
   categoryId: id,
@@ -111,7 +113,16 @@ export type RecurringDoc = z.infer<typeof recurringDoc>;
 
 export const currencyCode = z.string().regex(/^[A-Z]{3}$/, 'Invalid currency');
 
-export const settings = z.object({
+const percent = z.number().int('Use whole percentages').min(0).max(100);
+
+/** How income is split between needs, wants and savings, in whole percent (must total 100). */
+export const budgetRule = z
+  .object({ needs: percent, wants: percent, savings: percent })
+  .refine((r) => r.needs + r.wants + r.savings === 100, { message: 'Needs, wants and savings must add up to 100%' });
+export type BudgetRule = z.infer<typeof budgetRule>;
+export const DEFAULT_BUDGET_RULE: BudgetRule = { needs: 50, wants: 30, savings: 20 };
+
+const settingsBase = z.object({
   currency: currencyCode,
   /** IANA timezone used to decide what "today" is for recurring generation. */
   timezone: z.string().min(1).max(64),
@@ -119,10 +130,20 @@ export const settings = z.object({
   openingBalance: z.number().int().min(-100_000_000_000).max(100_000_000_000),
   lastExpenseCategoryId: id.optional(),
   lastIncomeCategoryId: id.optional(),
+  budgetRule,
+  /** Split every income into the budget rule's buckets and track what is left in each. */
+  autoSplit: z.boolean(),
+});
+
+/** Stored settings. Fields added later get defaults so older settings.json files still load. */
+export const settings = settingsBase.extend({
+  budgetRule: budgetRule.default(DEFAULT_BUDGET_RULE),
+  autoSplit: z.boolean().default(true),
 });
 export type Settings = z.infer<typeof settings>;
 
-export const settingsPatch = settings.partial();
+/** Partial update: no defaults here, so omitted fields are never reset. */
+export const settingsPatch = settingsBase.partial();
 export type SettingsPatch = z.infer<typeof settingsPatch>;
 
 export const loginInput = z.object({

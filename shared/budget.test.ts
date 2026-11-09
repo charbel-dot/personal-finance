@@ -110,6 +110,7 @@ describe('analyzeBudget', () => {
     const recurring: Recurring[] = [
       {
         id: 'r',
+        type: 'expense',
         name: 'Rent',
         amount: 200000,
         categoryId: 'housing',
@@ -121,6 +122,7 @@ describe('analyzeBudget', () => {
       },
       {
         id: 'p',
+        type: 'expense',
         name: 'Paused',
         amount: 999999,
         categoryId: 'subscriptions',
@@ -156,5 +158,43 @@ describe('analyzeBudget', () => {
     const a = analyzeBudget({ ...base, current: [], previous: [] });
     expect(a.tips).toEqual([]);
     expect(a.totals.income).toBe(0);
+  });
+});
+
+describe('custom budget rule', () => {
+  it('uses the configured percentages for targets and messages', () => {
+    const a = analyzeBudget({
+      ...base,
+      rule: { needs: 60, wants: 20, savings: 20 },
+      current: [tx('income', 'salary', 1000), tx('expense', 'housing', 550), tx('expense', 'dining', 250)],
+      previous: [],
+    });
+    expect(a.rule.map((r) => r.target)).toEqual([0.6, 0.2, 0.2]);
+    const wants = a.insights.find((i) => i.id === 'wants-high');
+    expect(wants?.title).toContain('target 20%');
+    expect(a.insights.map((i) => i.id)).not.toContain('needs-high');
+  });
+
+  it('ignores recurring income when measuring committed costs', () => {
+    const a = analyzeBudget({
+      ...base,
+      recurring: [
+        {
+          id: 's',
+          type: 'income',
+          name: 'Salary',
+          amount: 500000,
+          categoryId: 'salary',
+          frequency: 'monthly',
+          startDate: '2026-01-01',
+          paused: false,
+          createdAt: '',
+          updatedAt: '',
+        },
+      ],
+      current: [tx('income', 'salary', 5000)],
+      previous: [],
+    });
+    expect(a.recurringMonthly).toBe(0);
   });
 });
