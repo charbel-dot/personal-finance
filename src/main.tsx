@@ -1,11 +1,10 @@
 import { QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import './index.css';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { ApiError } from './lib/api';
 import { keys } from './lib/queries';
-import './styles/global.css';
-import './styles/components.css';
 
 const queryClient: QueryClient = new QueryClient({
   queryCache: new QueryCache({

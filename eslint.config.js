@@ -46,5 +46,20 @@ export default tseslint.config(
     files: ['e2e/**/*.ts', '*.config.ts'],
     languageOptions: { globals: globals.node },
   },
+  {
+    // Vendored shadcn/ui primitives: generated code kept close to upstream so `shadcn add` can update it.
+    // App code stays on the strict type-aware rules above.
+    files: ['src/components/ui/**/*.tsx'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+      '@typescript-eslint/restrict-template-expressions': 'off',
+      '@typescript-eslint/no-unnecessary-condition': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-argument': 'off',
+      '@typescript-eslint/no-unnecessary-type-assertion': 'off',
+      '@typescript-eslint/prefer-nullish-coalescing': 'off',
+    },
+  },
   prettier,
 );

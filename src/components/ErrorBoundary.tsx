@@ -29,10 +29,14 @@ export class ErrorBoundary extends Component<Props, State> {
   override render() {
     if (!this.state.error) return this.props.children;
     return (
-      <div className="empty" role="alert">
-        <p className="empty__title">Something went wrong</p>
-        <p className="small">{this.state.error.message}</p>
-        <button type="button" className="btn btn--secondary btn--sm" onClick={() => window.location.reload()}>
+      <div className="flex flex-col items-center gap-2 px-6 py-16 text-center" role="alert">
+        <p className="font-medium">Something went wrong</p>
+        <p className="max-w-sm text-sm text-muted-foreground">{this.state.error.message}</p>
+        <button
+          type="button"
+          className="mt-2 h-9 rounded-md border px-4 text-sm font-medium hover:bg-accent"
+          onClick={() => window.location.reload()}
+        >
           Reload
         </button>
       </div>

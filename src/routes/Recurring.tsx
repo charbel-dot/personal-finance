@@ -1,158 +1,34 @@
+import { CalendarClock, Loader2, MoreHorizontal, Pause, Pencil, Play, Plus, Repeat, Trash2 } from 'lucide-react';
 import { useId, useState, type CSSProperties, type SyntheticEvent } from 'react';
+import { toast } from 'sonner';
+import { isValidIsoDate } from '../../shared/dates';
 import { centsToInput, parseAmount } from '../../shared/money';
 import { monthlyEquivalent, nextDueDate } from '../../shared/recurring';
-import { isValidIsoDate } from '../../shared/dates';
 import type { Frequency, Recurring as Rule, RecurringInput } from '../../shared/schema';
-import { CategoryPicker } from '../components/CategoryPicker';
-import { EmptyState } from '../components/Feedback';
-import { Icon } from '../components/Icon';
-import { PageHeader } from '../components/Layout';
-import { Sheet } from '../components/Sheet';
-import { useConfirm } from '../context/confirm';
-import { useToast } from '../context/toast';
-import { currencySymbol, formatDate, useMoney } from '../lib/format';
-import { useAppData, useDeleteRecurring, useSaveRecurring } from '../lib/queries';
-import { localToday } from '../lib/today';
+import { CategoryPicker } from '@/components/CategoryPicker';
+import { EmptyState } from '@/components/Feedback';
+import { Page, PageHeader } from '@/components/Layout';
+import { ResponsiveSheet } from '@/components/ResponsiveSheet';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useConfirm } from '@/context/confirm';
+import { currencySymbol, formatDate, useMoney } from '@/lib/format';
+import { useAppData, useDeleteRecurring, useSaveRecurring } from '@/lib/queries';
+import { localToday } from '@/lib/today';
+import { cn } from '@/lib/utils';
 
 const FREQ_LABEL: Record<Frequency, string> = { weekly: 'Weekly', monthly: 'Monthly', yearly: 'Yearly' };
-
-export default function Recurring() {
-  const { recurring, categories } = useAppData();
-  const money = useMoney();
-  const save = useSaveRecurring();
-  const remove = useDeleteRecurring();
-  const toast = useToast();
-  const confirm = useConfirm();
-  const today = localToday();
-  const [editing, setEditing] = useState<{ rule?: Rule; nonce: number } | null>(null);
-
-  const active = recurring.filter((r) => !r.paused);
-  const monthly = active.reduce((acc, r) => acc + monthlyEquivalent(r.amount, r.frequency), 0);
-  const sorted = [...recurring].sort(
-    (a, b) => Number(a.paused) - Number(b.paused) || nextDueDate(a, today).localeCompare(nextDueDate(b, today)),
-  );
-
-  async function togglePause(rule: Rule) {
-    try {
-      await save.mutateAsync({ id: rule.id, input: toInput(rule, { paused: !rule.paused }) });
-      toast.show(rule.paused ? `${rule.name} resumed` : `${rule.name} paused`);
-    } catch (err) {
-      toast.show(err instanceof Error ? err.message : 'Could not update', { kind: 'error' });
-    }
-  }
-
-  async function onDelete(rule: Rule) {
-    const ok = await confirm({
-      title: `Delete “${rule.name}”?`,
-      message: 'Future entries stop being created. Entries already in your history are kept.',
-      confirmLabel: 'Delete',
-      danger: true,
-    });
-    if (!ok) return;
-    try {
-      await remove.mutateAsync(rule.id);
-      toast.show('Recurring expense deleted');
-    } catch (err) {
-      toast.show(err instanceof Error ? err.message : 'Could not delete', { kind: 'error' });
-    }
-  }
-
-  return (
-    <>
-      <PageHeader
-        title="Recurring"
-        actions={
-          <button type="button" className="btn btn--primary btn--sm" onClick={() => setEditing({ nonce: Date.now() })}>
-            <Icon name="plus" size={18} /> New
-          </button>
-        }
-      />
-      <div className="main stack">
-        <section className="card">
-          <p className="muted small">Committed every month</p>
-          <p className="hero__amount num" style={{ fontSize: 'var(--text-2xl)' }}>
-            {money(monthly)}
-          </p>
-          <p className="muted xs">
-            {active.length} active · {recurring.length - active.length} paused · weekly and yearly costs normalised to a
-            month
-          </p>
-        </section>
-
-        <section className="card card--flush" aria-label="Recurring expenses">
-          {sorted.length === 0 ? (
-            <EmptyState
-              icon="repeat"
-              title="No recurring expenses yet"
-              action={
-                <button
-                  type="button"
-                  className="btn btn--primary btn--sm"
-                  onClick={() => setEditing({ nonce: Date.now() })}
-                >
-                  Add one
-                </button>
-              }
-            >
-              Rent, subscriptions and bills are logged automatically when due.
-            </EmptyState>
-          ) : (
-            <ul className="list">
-              {sorted.map((rule) => {
-                const cat = categories.expense.find((c) => c.id === rule.categoryId);
-                return (
-                  <li key={rule.id} className="list-item" style={{ opacity: rule.paused ? 0.65 : 1 }}>
-                    <span className="dot dot--row" style={{ '--dot': cat?.color } as CSSProperties} />
-                    <button
-                      type="button"
-                      className="list-item__main"
-                      style={{ border: 0, background: 'none', padding: 0, textAlign: 'left' }}
-                      onClick={() => setEditing({ rule, nonce: Date.now() })}
-                      aria-label={`Edit ${rule.name}`}
-                    >
-                      <span className="list-item__title" style={{ display: 'block' }}>
-                        {rule.name}
-                      </span>
-                      <span className="list-item__sub list-item__sub--wrap" style={{ display: 'block' }}>
-                        {money(rule.amount)} · {FREQ_LABEL[rule.frequency]} ·{' '}
-                        {rule.paused ? 'Paused' : `Next ${formatDate(nextDueDate(rule, today), today)}`}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      className="icon-btn"
-                      onClick={() => void togglePause(rule)}
-                      aria-label={rule.paused ? `Resume ${rule.name}` : `Pause ${rule.name}`}
-                      disabled={save.isPending}
-                    >
-                      <Icon name={rule.paused ? 'play' : 'pause'} size={18} />
-                    </button>
-                    <button
-                      type="button"
-                      className="icon-btn"
-                      onClick={() => void onDelete(rule)}
-                      aria-label={`Delete ${rule.name}`}
-                    >
-                      <Icon name="trash" size={18} />
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </section>
-      </div>
-
-      <Sheet
-        open={editing !== null}
-        onClose={() => setEditing(null)}
-        title={editing?.rule ? 'Edit recurring expense' : 'New recurring expense'}
-      >
-        {editing && <RecurringForm key={editing.nonce} rule={editing.rule} onDone={() => setEditing(null)} />}
-      </Sheet>
-    </>
-  );
-}
 
 function toInput(rule: Rule, patch: Partial<RecurringInput> = {}): RecurringInput {
   return {
@@ -167,10 +43,175 @@ function toInput(rule: Rule, patch: Partial<RecurringInput> = {}): RecurringInpu
   };
 }
 
+export default function Recurring() {
+  const { recurring, categories } = useAppData();
+  const money = useMoney();
+  const today = localToday();
+  const [sheet, setSheet] = useState<{ open: boolean; rule?: Rule; nonce: number }>({ open: false, nonce: 0 });
+  const openSheet = (rule?: Rule) => setSheet({ open: true, rule, nonce: Date.now() });
+
+  const active = recurring.filter((r) => !r.paused);
+  const monthly = active.reduce((acc, r) => acc + monthlyEquivalent(r.amount, r.frequency), 0);
+  const sorted = [...recurring].sort(
+    (a, b) => Number(a.paused) - Number(b.paused) || nextDueDate(a, today).localeCompare(nextDueDate(b, today)),
+  );
+  const next = active.length ? sorted[0] : undefined;
+
+  return (
+    <Page>
+      <PageHeader
+        title="Recurring"
+        subtitle="Bills and subscriptions that log themselves when due."
+        actions={
+          <Button className="press" onClick={() => openSheet()}>
+            <Plus aria-hidden="true" /> New recurring
+          </Button>
+        }
+      />
+
+      <div className="stagger space-y-4">
+        <Card className="py-5">
+          <CardContent className="grid grid-cols-2 gap-5 lg:grid-cols-3">
+            <div>
+              <p className="text-sm text-muted-foreground">Committed each month</p>
+              <p className="tabular mt-1 text-3xl font-bold tracking-tight">{money(monthly)}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Active</p>
+              <p className="tabular mt-1 text-3xl font-bold tracking-tight">
+                {active.length}
+                <span className="ml-2 text-sm font-normal text-muted-foreground">
+                  {recurring.length - active.length} paused
+                </span>
+              </p>
+            </div>
+            <div className="col-span-2 lg:col-span-1">
+              <p className="text-sm text-muted-foreground">Next due</p>
+              <p className="mt-1 truncate text-lg font-semibold">
+                {next ? `${next.name} · ${formatDate(nextDueDate(next, today), today)}` : '—'}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="gap-0 overflow-clip py-0">
+          {sorted.length === 0 ? (
+            <EmptyState
+              icon={Repeat}
+              title="No recurring expenses yet"
+              action={<Button onClick={() => openSheet()}>Add your first</Button>}
+            >
+              Rent, subscriptions and bills are added to your history automatically on each due date.
+            </EmptyState>
+          ) : (
+            <ul className="divide-y" aria-label="Recurring expenses">
+              {sorted.map((rule) => (
+                <RuleRow
+                  key={rule.id}
+                  rule={rule}
+                  color={categories.expense.find((c) => c.id === rule.categoryId)?.color}
+                  today={today}
+                  onEdit={() => openSheet(rule)}
+                />
+              ))}
+            </ul>
+          )}
+        </Card>
+        <p className="text-xs text-muted-foreground">Weekly and yearly costs are converted to a monthly figure.</p>
+      </div>
+
+      <ResponsiveSheet
+        open={sheet.open}
+        onClose={() => setSheet((s) => ({ ...s, open: false }))}
+        title={sheet.rule ? 'Edit recurring expense' : 'New recurring expense'}
+      >
+        <RecurringForm key={sheet.nonce} rule={sheet.rule} onDone={() => setSheet((s) => ({ ...s, open: false }))} />
+      </ResponsiveSheet>
+    </Page>
+  );
+}
+
+function RuleRow({ rule, color, today, onEdit }: { rule: Rule; color?: string; today: string; onEdit: () => void }) {
+  const money = useMoney();
+  const save = useSaveRecurring();
+  const remove = useDeleteRecurring();
+  const confirm = useConfirm();
+
+  async function togglePause() {
+    try {
+      await save.mutateAsync({ id: rule.id, input: toInput(rule, { paused: !rule.paused }) });
+      toast.success(rule.paused ? `${rule.name} resumed` : `${rule.name} paused`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not update');
+    }
+  }
+
+  async function onDelete() {
+    const ok = await confirm({
+      title: `Delete “${rule.name}”?`,
+      message: 'No more entries will be created. Entries already in your history stay.',
+      confirmLabel: 'Delete',
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await remove.mutateAsync(rule.id);
+      toast.success('Recurring expense deleted');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not delete');
+    }
+  }
+
+  return (
+    <li className={cn('flex min-h-18 items-center gap-3 pr-2 pl-4 sm:pl-6', rule.paused && 'opacity-60')}>
+      <span
+        className="size-2.5 shrink-0 rounded-full bg-(--dot) ring-4 ring-(--dot)/15"
+        style={{ '--dot': color ?? 'var(--muted-foreground)' } as CSSProperties}
+        aria-hidden="true"
+      />
+      <button
+        type="button"
+        onClick={onEdit}
+        className="min-w-0 flex-1 rounded-md py-3 text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        aria-label={`Edit ${rule.name}`}
+      >
+        <span className="flex items-center gap-2">
+          <span className="truncate font-medium">{rule.name}</span>
+          {rule.paused && <Badge variant="secondary">Paused</Badge>}
+        </span>
+        <span className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <CalendarClock className="size-3.5 shrink-0" aria-hidden="true" />
+          {FREQ_LABEL[rule.frequency]}
+          {!rule.paused && ` · next ${formatDate(nextDueDate(rule, today), today)}`}
+        </span>
+      </button>
+      <span className="tabular shrink-0 font-semibold">{money(rule.amount)}</span>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" className="size-10" aria-label={`Actions for ${rule.name}`}>
+            {save.isPending ? <Loader2 className="animate-spin" /> : <MoreHorizontal />}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={onEdit}>
+            <Pencil /> Edit
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => void togglePause()}>
+            {rule.paused ? <Play /> : <Pause />} {rule.paused ? 'Resume' : 'Pause'}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem variant="destructive" onSelect={() => void onDelete()}>
+            <Trash2 /> Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </li>
+  );
+}
+
 function RecurringForm({ rule, onDone }: { rule?: Rule; onDone: () => void }) {
   const { categories, settings } = useAppData();
   const save = useSaveRecurring();
-  const toast = useToast();
   const ids = { name: useId(), amount: useId(), freq: useId(), start: useId(), note: useId() };
   const expenseCats = categories.expense.filter((c) => !c.archived || c.id === rule?.categoryId);
 
@@ -207,38 +248,35 @@ function RecurringForm({ rule, onDone }: { rule?: Rule; onDone: () => void }) {
           paused: rule?.paused ?? false,
         },
       });
-      toast.show(rule ? 'Recurring expense updated' : 'Recurring expense added');
+      toast.success(rule ? 'Recurring expense updated' : 'Recurring expense added');
       onDone();
     } catch (err) {
-      toast.show(err instanceof Error ? err.message : 'Could not save', { kind: 'error' });
+      toast.error(err instanceof Error ? err.message : 'Could not save');
     }
   }
 
   return (
-    <form className="stack" onSubmit={(e) => void onSubmit(e)} noValidate>
-      <div className="field">
-        <label htmlFor={ids.name} className="field__label">
-          Name
-        </label>
-        <input
+    <form className="space-y-5" onSubmit={(e) => void onSubmit(e)} noValidate>
+      <div className="space-y-2">
+        <Label htmlFor={ids.name}>Name</Label>
+        <Input
           id={ids.name}
-          className="input"
           value={name}
           maxLength={60}
           placeholder="e.g. Rent, Netflix"
+          data-autofocus={rule ? undefined : true}
           aria-invalid={Boolean(errors.name)}
           onChange={(e) => setName(e.target.value)}
+          className="h-11"
         />
-        {errors.name && <span className="field__error">{errors.name}</span>}
+        {errors.name && <p className="text-sm text-destructive">{errors.name}</p>}
       </div>
-      <div className="grid-2" style={{ gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <div className="field">
-          <label htmlFor={ids.amount} className="field__label">
-            Amount ({currencySymbol(settings.currency)})
-          </label>
-          <input
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-2">
+          <Label htmlFor={ids.amount}>Amount ({currencySymbol(settings.currency)})</Label>
+          <Input
             id={ids.amount}
-            className="input num"
+            className="tabular h-11"
             inputMode="decimal"
             autoComplete="off"
             placeholder="0.00"
@@ -247,22 +285,20 @@ function RecurringForm({ rule, onDone }: { rule?: Rule; onDone: () => void }) {
             aria-invalid={Boolean(errors.amount)}
             onChange={(e) => setAmount(e.target.value.replace(/[^\d.,]/g, ''))}
           />
-          {errors.amount && <span className="field__error">{errors.amount}</span>}
+          {errors.amount && <p className="text-sm text-destructive">{errors.amount}</p>}
         </div>
-        <div className="field">
-          <label htmlFor={ids.freq} className="field__label">
-            Repeats
-          </label>
-          <select
-            id={ids.freq}
-            className="select"
-            value={frequency}
-            onChange={(e) => setFrequency(e.target.value as Frequency)}
-          >
-            <option value="weekly">Weekly</option>
-            <option value="monthly">Monthly</option>
-            <option value="yearly">Yearly</option>
-          </select>
+        <div className="space-y-2">
+          <Label htmlFor={ids.freq}>Repeats</Label>
+          <Select value={frequency} onValueChange={(v) => setFrequency(v as Frequency)}>
+            <SelectTrigger id={ids.freq} className="h-11 w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="weekly">Weekly</SelectItem>
+              <SelectItem value="monthly">Monthly</SelectItem>
+              <SelectItem value="yearly">Yearly</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
       <CategoryPicker
@@ -273,46 +309,39 @@ function RecurringForm({ rule, onDone }: { rule?: Rule; onDone: () => void }) {
         onChange={setCategoryId}
         error={errors.categoryId}
       />
-      <div className="grid-2" style={{ gridTemplateColumns: '1fr 1.4fr', gap: 12 }}>
-        <div className="field">
-          <label htmlFor={ids.start} className="field__label">
-            Start date
-          </label>
-          <input
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+        <div className="space-y-2">
+          <Label htmlFor={ids.start}>Start date</Label>
+          <Input
             id={ids.start}
-            className="input"
             type="date"
             value={startDate}
             aria-invalid={Boolean(errors.startDate)}
             onChange={(e) => setStartDate(e.target.value)}
+            className="h-11"
           />
-          {errors.startDate && <span className="field__error">{errors.startDate}</span>}
+          {errors.startDate && <p className="text-sm text-destructive">{errors.startDate}</p>}
         </div>
-        <div className="field">
-          <label htmlFor={ids.note} className="field__label">
-            Note <span className="muted">(optional)</span>
-          </label>
-          <input
+        <div className="space-y-2">
+          <Label htmlFor={ids.note}>
+            Note <span className="font-normal text-muted-foreground">(optional)</span>
+          </Label>
+          <Input
             id={ids.note}
-            className="input"
             maxLength={280}
             value={note}
             onChange={(e) => setNote(e.target.value)}
+            className="h-11"
           />
         </div>
       </div>
-      <p className="field__hint">
-        Entries are added automatically on each due date. Past dates before this month aren&apos;t back-filled.
+      <p className="text-xs text-muted-foreground">
+        Added automatically on each due date. Dates before this month aren’t back-filled.
       </p>
-      <button type="submit" className="btn btn--primary btn--block" disabled={save.isPending}>
-        {save.isPending ? (
-          <span className="spinner" aria-label="Saving" />
-        ) : rule ? (
-          'Save changes'
-        ) : (
-          'Add recurring expense'
-        )}
-      </button>
+      <Button type="submit" className="press h-11 w-full text-base" disabled={save.isPending}>
+        {save.isPending && <Loader2 className="animate-spin" aria-hidden="true" />}
+        {rule ? 'Save changes' : 'Add recurring expense'}
+      </Button>
     </form>
   );
 }

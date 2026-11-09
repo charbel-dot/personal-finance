@@ -1,13 +1,18 @@
+import { ArrowDownLeft, ArrowUpRight, Loader2 } from 'lucide-react';
 import { useId, useState, type SyntheticEvent } from 'react';
-import { centsToInput, parseAmount } from '../../shared/money';
+import { toast } from 'sonner';
 import { isValidIsoDate } from '../../shared/dates';
+import { centsToInput, parseAmount } from '../../shared/money';
 import type { Transaction, TransactionType } from '../../shared/schema';
-import { currencySymbol } from '../lib/format';
-import { useAppData, useDeleteTransaction, useSaveTransaction } from '../lib/queries';
-import { localToday } from '../lib/today';
 import { CategoryPicker } from './CategoryPicker';
-import { useConfirm } from '../context/confirm';
-import { useToast } from '../context/toast';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useConfirm } from '@/context/confirm';
+import { currencySymbol } from '@/lib/format';
+import { useAppData, useDeleteTransaction, useSaveTransaction } from '@/lib/queries';
+import { localToday } from '@/lib/today';
+import { cn } from '@/lib/utils';
 
 interface Props {
   initialType: TransactionType;
@@ -21,11 +26,15 @@ interface Errors {
   date?: string;
 }
 
+const TYPES = [
+  { value: 'expense', label: 'Expense', icon: ArrowUpRight },
+  { value: 'income', label: 'Income', icon: ArrowDownLeft },
+] as const;
+
 export function TransactionForm({ initialType, editing, onDone }: Props) {
   const { categories, settings } = useAppData();
   const save = useSaveTransaction();
   const remove = useDeleteTransaction();
-  const toast = useToast();
   const confirm = useConfirm();
   const ids = { amount: useId(), date: useId(), note: useId(), amountError: useId() };
 
@@ -61,47 +70,63 @@ export function TransactionForm({ initialType, editing, onDone }: Props) {
         original: editing,
         input: { type, amount: cents, categoryId, date, note: note.trim() || undefined },
       });
-      toast.show(editing ? 'Transaction updated' : type === 'income' ? 'Income added' : 'Expense added');
+      toast.success(editing ? 'Transaction updated' : type === 'income' ? 'Income added' : 'Expense added');
       onDone();
     } catch (err) {
-      toast.show(err instanceof Error ? err.message : 'Could not save', { kind: 'error' });
+      toast.error(err instanceof Error ? err.message : 'Could not save');
     }
   }
 
   async function onDelete() {
     if (!editing) return;
     const ok = await confirm({
-      title: 'Delete transaction?',
-      message: 'This permanently removes it from your history.',
+      title: 'Delete this transaction?',
+      message: 'It will be removed from your history and totals. This can’t be undone.',
       confirmLabel: 'Delete',
       danger: true,
     });
     if (!ok) return;
     try {
       await remove.mutateAsync(editing);
-      toast.show('Transaction deleted');
+      toast.success('Transaction deleted');
       onDone();
     } catch (err) {
-      toast.show(err instanceof Error ? err.message : 'Could not delete', { kind: 'error' });
+      toast.error(err instanceof Error ? err.message : 'Could not delete');
     }
   }
 
   return (
-    <form className="stack" onSubmit={(e) => void onSubmit(e)} noValidate>
-      <div className="segmented segmented--type" role="group" aria-label="Transaction type">
-        {(['expense', 'income'] as const).map((t) => (
-          <button key={t} type="button" data-type={t} aria-pressed={type === t} onClick={() => setType(t)}>
-            {t === 'expense' ? 'Expense' : 'Income'}
+    <form className="space-y-5" onSubmit={(e) => void onSubmit(e)} noValidate>
+      <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1" role="group" aria-label="Transaction type">
+        {TYPES.map(({ value, label, icon: Icon }) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={type === value}
+            onClick={() => setType(value)}
+            className={cn(
+              'press flex h-9 items-center justify-center gap-1.5 rounded-md text-sm font-medium text-muted-foreground transition-colors outline-none',
+              'focus-visible:ring-[3px] focus-visible:ring-ring/50',
+              type === value && 'bg-background text-foreground shadow-sm dark:bg-accent',
+              type === value && (value === 'income' ? 'text-income' : 'text-expense'),
+            )}
+          >
+            <Icon className="size-4" aria-hidden="true" />
+            {label}
           </button>
         ))}
       </div>
 
-      <div className="field">
-        <label htmlFor={ids.amount} className="field__label">
-          Amount
-        </label>
-        <div className="amount-input">
-          <span className="amount-input__symbol" aria-hidden="true">
+      <div className="space-y-2">
+        <Label htmlFor={ids.amount}>Amount</Label>
+        <div
+          className={cn(
+            'flex items-center gap-2 rounded-xl border bg-muted/40 px-4 py-3 transition-shadow',
+            'focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50',
+            errors.amount && 'border-destructive',
+          )}
+        >
+          <span className="text-2xl font-semibold text-muted-foreground" aria-hidden="true">
             {currencySymbol(settings.currency)}
           </span>
           <input
@@ -112,19 +137,19 @@ export function TransactionForm({ initialType, editing, onDone }: Props) {
             autoComplete="off"
             enterKeyHint="done"
             placeholder="0.00"
-            // Focused as soon as the sheet opens: the fastest path is "open → type → save".
             data-autofocus={editing ? undefined : true}
             value={amount}
             maxLength={16}
             aria-invalid={Boolean(errors.amount)}
             aria-describedby={errors.amount ? ids.amountError : undefined}
             onChange={(e) => setAmount(e.target.value.replace(/[^\d.,]/g, ''))}
+            className="tabular w-full min-w-0 bg-transparent text-4xl font-bold tracking-tight outline-none placeholder:text-muted-foreground/50"
           />
         </div>
         {errors.amount && (
-          <span id={ids.amountError} className="field__error" role="alert">
+          <p id={ids.amountError} className="text-sm text-destructive" role="alert">
             {errors.amount}
-          </span>
+          </p>
         )}
       </div>
 
@@ -137,47 +162,51 @@ export function TransactionForm({ initialType, editing, onDone }: Props) {
         error={errors.categoryId}
       />
 
-      <div className="grid-2" style={{ gridTemplateColumns: '1fr 1.4fr' }}>
-        <div className="field">
-          <label htmlFor={ids.date} className="field__label">
-            Date
-          </label>
-          <input
+      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] gap-3">
+        <div className="space-y-2">
+          <Label htmlFor={ids.date}>Date</Label>
+          <Input
             id={ids.date}
-            className="input"
             type="date"
             required
             value={date}
             aria-invalid={Boolean(errors.date)}
             onChange={(e) => setDate(e.target.value)}
+            className="h-11"
           />
-          {errors.date && <span className="field__error">{errors.date}</span>}
+          {errors.date && <p className="text-sm text-destructive">{errors.date}</p>}
         </div>
-        <div className="field">
-          <label htmlFor={ids.note} className="field__label">
-            Note <span className="muted">(optional)</span>
-          </label>
-          <input
+        <div className="space-y-2">
+          <Label htmlFor={ids.note}>
+            Note <span className="font-normal text-muted-foreground">(optional)</span>
+          </Label>
+          <Input
             id={ids.note}
-            className="input"
-            type="text"
             maxLength={280}
             value={note}
             placeholder={type === 'income' ? 'e.g. November invoice' : 'e.g. Lunch with Sam'}
             onChange={(e) => setNote(e.target.value)}
+            className="h-11"
           />
         </div>
       </div>
 
-      <div className="row" style={{ marginTop: 4 }}>
+      <div className="sticky bottom-0 -mx-1 flex gap-2 bg-background px-1 pt-3 pb-1">
         {editing && (
-          <button type="button" className="btn btn--ghost" onClick={() => void onDelete()} disabled={remove.isPending}>
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-11 text-destructive hover:text-destructive"
+            onClick={() => void onDelete()}
+            disabled={remove.isPending}
+          >
             Delete
-          </button>
+          </Button>
         )}
-        <button type="submit" className="btn btn--primary btn--block" disabled={save.isPending} style={{ flex: 1 }}>
-          {save.isPending ? <span className="spinner" aria-label="Saving" /> : editing ? 'Save changes' : `Add ${type}`}
-        </button>
+        <Button type="submit" className="press h-11 flex-1 text-base" disabled={save.isPending}>
+          {save.isPending && <Loader2 className="animate-spin" aria-hidden="true" />}
+          {editing ? 'Save changes' : `Add ${type}`}
+        </Button>
       </div>
     </form>
   );

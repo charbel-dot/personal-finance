@@ -1,9 +1,10 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 export type ThemePref = 'system' | 'light' | 'dark';
 const KEY = 'money:theme';
+const media = () => window.matchMedia('(prefers-color-scheme: dark)');
 
-function read(): ThemePref {
+function readPref(): ThemePref {
   try {
     const v = localStorage.getItem(KEY);
     return v === 'light' || v === 'dark' ? v : 'system';
@@ -12,9 +13,23 @@ function read(): ThemePref {
   }
 }
 
-/** Theme preference is per-device (stored locally), applied via <html data-theme>. */
+function apply(pref: ThemePref) {
+  const dark = pref === 'dark' || (pref === 'system' && media().matches);
+  document.documentElement.classList.toggle('dark', dark);
+}
+
+/** Per-device theme preference, applied as the `.dark` class on <html> (shadcn convention). */
 export function useTheme(): [ThemePref, (t: ThemePref) => void] {
-  const [theme, setThemeState] = useState<ThemePref>(read);
+  const [theme, setThemeState] = useState<ThemePref>(readPref);
+
+  useEffect(() => {
+    if (theme !== 'system') return;
+    const mq = media();
+    const onChange = () => apply('system');
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, [theme]);
+
   const setTheme = useCallback((t: ThemePref) => {
     setThemeState(t);
     try {
@@ -23,8 +38,19 @@ export function useTheme(): [ThemePref, (t: ThemePref) => void] {
     } catch {
       /* storage unavailable: still apply for this session */
     }
-    if (t === 'system') delete document.documentElement.dataset.theme;
-    else document.documentElement.dataset.theme = t;
+    apply(t);
   }, []);
+
   return [theme, setTheme];
+}
+
+/** Current resolved scheme, kept in sync with the <html> class (for components like the toaster). */
+export function useIsDark(): boolean {
+  const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'));
+  useEffect(() => {
+    const obs = new MutationObserver(() => setDark(document.documentElement.classList.contains('dark')));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => obs.disconnect();
+  }, []);
+  return dark;
 }

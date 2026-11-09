@@ -42,10 +42,23 @@ Browser ──► Cloudflare Pages ── static SPA (dist/)
 - **Settings**: currency (default USD), light, dark or system theme, opening balance, categories and
   income sources.
 
+## UI
+
+Built with [shadcn/ui](https://ui.shadcn.com) (Radix primitives) on Tailwind CSS v4, with
+[lucide](https://lucide.dev) icons, [sonner](https://sonner.emilkowal.ski) toasts and
+[recharts](https://recharts.org) charts. recharts loads on demand, so the first screen stays light.
+Colours, radii and money semantics (`income`, `expense`, `brand`) are CSS variables in
+`src/index.css`, with a near-black dark theme and a neutral light theme. Add more components with:
+
+```bash
+npx shadcn@latest add <component>
+```
+
 ## Project layout
 
 ```
-src/                React app (lazy routes, components, hooks, design tokens in styles/)
+src/                React app: lazy routes, shadcn/ui components (src/components/ui),
+                    Tailwind v4 design tokens in src/index.css, hooks
 shared/             Pure TS shared by client + server: zod schemas, dates, money,
                     budget engine, recurring engine (+ unit tests)
 server/             Hono API: auth (PBKDF2 + HMAC-signed cookie), R2 JSON store with
@@ -238,7 +251,8 @@ device**. To sign everything out without changing the password, rotate `SESSION_
   SameSite).
 - Inputs are validated with zod on the server and checked in the forms on the client. Request bodies
   are capped at 64 KB.
-- Headers: strict CSP (no inline scripts or styles), HSTS, `X-Frame-Options: DENY`, `nosniff`,
+- Headers: strict CSP (no inline or third-party scripts; inline styles are allowed because the
+  Radix/shadcn primitives and toasts inject small `<style>` tags), HSTS, `X-Frame-Options: DENY`, `nosniff`,
   `Referrer-Policy: no-referrer`, Permissions-Policy, COOP and CORP. API responses are `no-store`, and
   the service worker never caches `/api`.
 - No secrets in the repo: `.dev.vars` and `.env*` are gitignored, and `.env.example` documents them.

@@ -1,54 +1,27 @@
-import type { CSSProperties, ReactNode } from 'react';
-import { Icon, type IconName } from './Icon';
-
-export function Skeleton({
-  width = '100%',
-  height = 16,
-  style,
-}: {
-  width?: number | string;
-  height?: number | string;
-  style?: CSSProperties;
-}) {
-  return <div className="skeleton" style={{ width, height, ...style }} aria-hidden="true" />;
-}
-
-export function SkeletonList({ rows = 5 }: { rows?: number }) {
-  return (
-    <div aria-busy="true" aria-label="Loading">
-      {Array.from({ length: rows }, (_, i) => (
-        <div key={i} className="list-item">
-          <Skeleton width={40} height={40} style={{ borderRadius: 14 }} />
-          <div className="list-item__main stack" style={{ gap: 6 }}>
-            <Skeleton width="55%" height={14} />
-            <Skeleton width="30%" height={10} />
-          </div>
-          <Skeleton width={64} height={14} />
-        </div>
-      ))}
-    </div>
-  );
-}
+import { AlertTriangle, type LucideIcon } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export function EmptyState({
-  icon = 'wallet',
+  icon: Icon,
   title,
   children,
   action,
 }: {
-  icon?: IconName;
+  icon: LucideIcon;
   title: string;
   children?: ReactNode;
   action?: ReactNode;
 }) {
   return (
-    <div className="empty">
-      <div className="empty__icon">
-        <Icon name={icon} size={24} />
+    <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
+      <div className="mb-1 grid size-12 place-items-center rounded-full bg-muted text-muted-foreground">
+        <Icon className="size-5" aria-hidden="true" />
       </div>
-      <p className="empty__title">{title}</p>
-      {children && <p className="small">{children}</p>}
-      {action}
+      <p className="font-medium">{title}</p>
+      {children && <p className="max-w-xs text-sm text-muted-foreground">{children}</p>}
+      {action && <div className="mt-2">{action}</div>}
     </div>
   );
 }
@@ -56,17 +29,34 @@ export function EmptyState({
 export function ErrorMessage({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   return (
     <EmptyState
-      icon="alert"
-      title="Couldn't load this"
+      icon={AlertTriangle}
+      title="Couldn’t load this"
       action={
         onRetry && (
-          <button type="button" className="btn btn--secondary btn--sm" onClick={onRetry}>
+          <Button variant="outline" size="sm" onClick={onRetry}>
             Try again
-          </button>
+          </Button>
         )
       }
     >
-      {error instanceof Error ? error.message : 'Unknown error'}
+      {error instanceof Error ? error.message : 'Something went wrong.'}
     </EmptyState>
+  );
+}
+
+export function RowsSkeleton({ rows = 5 }: { rows?: number }) {
+  return (
+    <div aria-busy="true" aria-label="Loading" className="divide-y">
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} className="flex items-center gap-3 px-4 py-4 sm:px-6">
+          <Skeleton className="size-2.5 rounded-full" />
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-3.5 w-1/2" />
+            <Skeleton className="h-3 w-1/4" />
+          </div>
+          <Skeleton className="h-3.5 w-16" />
+        </div>
+      ))}
+    </div>
   );
 }

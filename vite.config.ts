@@ -1,10 +1,14 @@
+import { fileURLToPath, URL } from 'node:url';
+import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
+  resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   plugins: [
     react(),
+    tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'script-defer',
@@ -47,12 +51,17 @@ export default defineConfig({
   build: {
     target: 'es2022',
     sourcemap: false,
+    // The largest chunk is recharts (~160 KB gzipped). It is never in the initial load: it is fetched
+    // on demand by `loadRecharts()` after the dashboard has painted, so the default 500 KB warning
+    // doesn't apply to it.
+    chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {
             if (/[\\/](react|react-dom|scheduler|react-router)[\\/]/.test(id)) return 'react';
             if (id.includes('@tanstack')) return 'query';
+            if (/[\\/](radix-ui|@radix-ui|vaul|sonner|lucide-react)[\\/]/.test(id)) return 'ui';
           }
           return undefined;
         },

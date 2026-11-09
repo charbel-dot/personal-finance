@@ -1,20 +1,42 @@
-import { useMemo, useState, type CSSProperties } from 'react';
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  CalendarClock,
+  CircleAlert,
+  CircleCheck,
+  Inbox,
+  Lightbulb,
+  PiggyBank,
+  Repeat,
+  TrendingDown,
+  TrendingUp,
+  Wallet,
+  type LucideIcon,
+} from 'lucide-react';
+import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { Link } from 'react-router';
-import { analyzeBudget, type BudgetAnalysis, type Insight, type Slice } from '../../shared/budget';
+import { analyzeBudget, type BudgetAnalysis, type Insight } from '../../shared/budget';
 import { addDays, daysBetween } from '../../shared/dates';
 import { formatPercent } from '../../shared/money';
 import { upcoming } from '../../shared/recurring';
-import type { Category, Transaction } from '../../shared/schema';
-import { Donut } from '../components/Donut';
-import { EmptyState, ErrorMessage, Skeleton, SkeletonList } from '../components/Feedback';
-import { Icon, type IconName } from '../components/Icon';
-import { PageHeader } from '../components/Layout';
-import { TransactionRow } from '../components/TransactionRow';
-import { useQuickAdd } from '../context/quickAdd';
-import { formatDate, formatInDays, useMoney } from '../lib/format';
-import { resolvePeriod, type Period, type PeriodKind } from '../lib/period';
-import { useAppData, useBalance, useTransactions } from '../lib/queries';
-import { localToday } from '../lib/today';
+import type { Transaction } from '../../shared/schema';
+import { EmptyState, ErrorMessage, RowsSkeleton } from '@/components/Feedback';
+import { Page, PageHeader } from '@/components/Layout';
+import { TransactionRow } from '@/components/TransactionRow';
+import { Button } from '@/components/ui/button';
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useQuickAdd } from '@/context/quickAdd';
+import { useCountUp } from '@/hooks/use-count-up';
+import { formatDate, formatInDays, useMoney } from '@/lib/format';
+import { resolvePeriod, type Period, type PeriodKind } from '@/lib/period';
+import { useAppData, useBalance, useTransactions } from '@/lib/queries';
+import { localToday } from '@/lib/today';
+import { cn } from '@/lib/utils';
+import { CategoryCard, PaceCard } from './DashboardCharts';
 
 const PERIODS: { kind: PeriodKind; label: string }[] = [
   { kind: 'this-month', label: 'This month' },
@@ -22,155 +44,381 @@ const PERIODS: { kind: PeriodKind; label: string }[] = [
   { kind: 'custom', label: 'Custom' },
 ];
 
+const longDate = new Intl.DateTimeFormat(undefined, {
+  weekday: 'long',
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+});
+
+function greeting(hour: number) {
+  if (hour < 5) return 'Good night';
+  if (hour < 12) return 'Good morning';
+  if (hour < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
+type Range = { from: string; to: string };
+
 export default function Dashboard() {
   const { categories, recurring } = useAppData();
   const money = useMoney();
   const today = localToday();
-  const [period, setPeriod] = useState<Period>(() => ({
-    kind: 'this-month',
-    from: addDays(today, -29),
-    to: today,
-  }));
+  const [period, setPeriod] = useState<Period>(() => ({ kind: 'this-month', from: addDays(today, -29), to: today }));
   const resolved = useMemo(() => resolvePeriod(period, today), [period, today]);
   const { current: curRange, previous: prevRange, days: periodDays } = resolved;
   const tx = useTransactions({ from: prevRange.from, to: curRange.to });
 
-  const { current, analysis } = useMemo(() => {
+  const { current, previous, analysis } = useMemo(() => {
     const all = tx.data ?? [];
-    const inRange = (t: Transaction, r: { from: string; to: string }) => t.date >= r.from && t.date <= r.to;
+    const inRange = (t: Transaction, r: Range) => t.date >= r.from && t.date <= r.to;
     const cur = all.filter((t) => inRange(t, curRange));
     const prev = all.filter((t) => inRange(t, prevRange));
     return {
       current: cur,
-      analysis: analyzeBudget({
-        current: cur,
-        previous: prev,
-        categories,
-        recurring,
-        periodDays,
-        format: (c) => money(c),
-      }),
+      previous: prev,
+      analysis: analyzeBudget({ current: cur, previous: prev, categories, recurring, periodDays, format: money }),
     };
   }, [tx.data, curRange, prevRange, periodDays, categories, recurring, money]);
 
-  const loading = tx.isPending;
+  const status = tx.isError ? 'error' : tx.isPending ? 'loading' : current.length === 0 ? 'empty' : 'ready';
+  const now = new Date();
 
   return (
-    <>
-      <PageHeader title="Overview" />
-      <div className="main stack">
-        <div className="segmented" role="group" aria-label="Period">
-          {PERIODS.map((p) => (
-            <button
-              key={p.kind}
-              type="button"
-              aria-pressed={period.kind === p.kind}
-              onClick={() => setPeriod((prev) => ({ ...prev, kind: p.kind }))}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
+    <Page>
+      <PageHeader
+        title={greeting(now.getHours())}
+        subtitle={longDate.format(now)}
+        actions={
+          <Tabs value={period.kind} onValueChange={(v) => setPeriod((p) => ({ ...p, kind: v as PeriodKind }))}>
+            <TabsList className="h-10">
+              {PERIODS.map((p) => (
+                <TabsTrigger key={p.kind} value={p.kind} className="px-3">
+                  {p.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        }
+      />
 
-        {period.kind === 'custom' && <CustomRange period={period} onChange={setPeriod} />}
+      {period.kind === 'custom' && <CustomRange period={period} onChange={setPeriod} />}
 
-        <BalanceCard label={resolved.label} analysis={loading ? null : analysis} />
+      <div className="stagger grid gap-4 lg:grid-cols-3">
+        <BalanceCard label={resolved.label} analysis={status === 'loading' ? null : analysis} />
+        <SavingsCard analysis={status === 'loading' ? null : analysis} />
         <Insights
-          state={tx.isError ? 'error' : loading ? 'loading' : current.length === 0 ? 'empty' : 'ready'}
+          status={status}
           error={tx.error}
           onRetry={() => void tx.refetch()}
           analysis={analysis}
+          current={current}
+          previous={previous}
+          cur={curRange}
+          prev={prevRange}
+          today={today}
         />
-        <RecentCard items={loading ? null : current} today={today} />
-
-        <UpcomingCard today={today} categories={categories.expense} />
+        <RecentCard items={tx.isPending ? null : current} today={today} />
+        <UpcomingCard today={today} />
       </div>
-    </>
-  );
-}
-
-function BalanceCard({ label, analysis }: { label: string; analysis: BudgetAnalysis | null }) {
-  const money = useMoney();
-  const balance = useBalance();
-  const net = analysis?.totals.net ?? 0;
-  return (
-    <section className="card hero" aria-labelledby="balance-label">
-      <div className="card__title">
-        <span className="tile" style={{ '--tile': 'var(--income)' } as CSSProperties}>
-          <Icon name="wallet" size={18} />
-        </span>
-        <div>
-          <h2 id="balance-label">Current balance</h2>
-          <p className="muted xs">{label}</p>
-        </div>
-      </div>
-      <p
-        className="hero__amount num"
-        aria-live="polite"
-        data-negative={balance.data ? balance.data.balance < 0 : undefined}
-      >
-        {balance.data ? money(balance.data.balance) : <Skeleton width={160} height={38} style={{ opacity: 0.4 }} />}
-      </p>
-      <div className="stat-row">
-        <Stat label="Income" dot="var(--income)" value={analysis && money(analysis.totals.income)} />
-        <Stat label="Expenses" dot="var(--expense)" value={analysis && money(analysis.totals.expenses)} />
-        <Stat
-          label="Net"
-          value={analysis && money(net, { signed: true })}
-          tone={net > 0 ? 'good' : net < 0 ? 'bad' : undefined}
-        />
-      </div>
-    </section>
+    </Page>
   );
 }
 
 function Insights({
-  state,
+  status,
   error,
   onRetry,
   analysis,
+  current,
+  previous,
+  cur,
+  prev,
+  today,
 }: {
-  state: 'error' | 'loading' | 'empty' | 'ready';
+  status: 'error' | 'loading' | 'empty' | 'ready';
   error: unknown;
   onRetry: () => void;
   analysis: BudgetAnalysis;
+  current: Transaction[];
+  previous: Transaction[];
+  cur: Range;
+  prev: Range;
+  today: string;
 }) {
-  if (state === 'error') {
+  if (status === 'error') {
     return (
-      <div className="card">
+      <Card className="lg:col-span-3">
         <ErrorMessage error={error} onRetry={onRetry} />
-      </div>
+      </Card>
     );
   }
-  if (state === 'loading') {
-    return (
-      <div className="grid-2">
-        <Skeleton height={200} style={{ borderRadius: 14 }} />
-        <Skeleton height={200} style={{ borderRadius: 14 }} />
-      </div>
-    );
-  }
-  if (state === 'empty') return <FirstRun />;
+  if (status === 'loading') return <Skeleton className="h-80 rounded-xl lg:col-span-3" />;
+  if (status === 'empty') return <FirstRun />;
   return (
     <>
-      <Tips tips={analysis.tips} />
-      <div className="grid-2">
-        <DonutCard
-          title="Expenses by category"
-          slices={analysis.expensesByCategory}
-          total={analysis.totals.expenses}
-          empty="No expenses in this period"
-        />
-        <DonutCard
-          title="Income by source"
-          slices={analysis.incomeBySource}
-          total={analysis.totals.income}
-          empty="No income in this period"
-        />
-        <SplitCard analysis={analysis} />
-        <RuleCard analysis={analysis} />
+      <PaceCard current={current} previous={previous} cur={cur} prev={prev} today={today} />
+      <TipsCard tips={analysis.tips} />
+      <RuleCard analysis={analysis} />
+      <CategoryCard
+        className="lg:col-span-2"
+        title="Spending by category"
+        empty="No expenses in this period."
+        slices={analysis.expensesByCategory}
+        total={analysis.totals.expenses}
+      />
+      <CategoryCard
+        title="Income by source"
+        empty="No income in this period."
+        slices={analysis.incomeBySource}
+        total={analysis.totals.income}
+      />
+    </>
+  );
+}
+
+/* --------------------------------------------------------------------------- pieces */
+
+function AnimatedMoney({ cents, className }: { cents: number; className?: string }) {
+  const money = useMoney();
+  const value = useCountUp(cents);
+  return (
+    <span className={cn('tabular', className)}>
+      <span className="sr-only">{money(cents)}</span>
+      <span aria-hidden="true">{money(value)}</span>
+    </span>
+  );
+}
+
+function IconTile({ icon: Icon, tone }: { icon: LucideIcon; tone: string }) {
+  return (
+    <span
+      className="grid size-9 shrink-0 place-items-center rounded-lg bg-(--tone)/12 text-(--tone)"
+      style={{ '--tone': tone } as CSSProperties}
+      aria-hidden="true"
+    >
+      <Icon className="size-[18px]" />
+    </span>
+  );
+}
+
+function Stat({ label, value, dot, tone }: { label: string; value: ReactNode; dot?: string; tone?: string }) {
+  return (
+    <div className="min-w-0">
+      <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        {dot && <span className="size-2 rounded-full bg-(--dot)" style={{ '--dot': dot } as CSSProperties} />}
+        {label}
+      </p>
+      <div className={cn('tabular mt-1 truncate text-base font-semibold sm:text-lg', tone)}>{value}</div>
+    </div>
+  );
+}
+
+function BalanceCard({ label, analysis }: { label: string; analysis: BudgetAnalysis | null }) {
+  const balance = useBalance();
+  const money = useMoney();
+  const { openNew } = useQuickAdd();
+  const net = analysis?.totals.net ?? 0;
+  const negative = (balance.data?.balance ?? 0) < 0;
+  const loadingStat = <Skeleton className="h-6 w-20" />;
+  return (
+    <Card className="gap-5 lg:col-span-2">
+      <CardHeader>
+        <div className="flex items-center gap-3">
+          <IconTile icon={Wallet} tone="var(--income)" />
+          <div className="min-w-0">
+            <CardTitle className="text-base">Current balance</CardTitle>
+            <CardDescription>{label}</CardDescription>
+          </div>
+        </div>
+        <CardAction className="flex gap-2 max-sm:hidden">
+          <Button variant="outline" size="sm" className="press" onClick={() => openNew('income')}>
+            <ArrowDownLeft className="text-income" aria-hidden="true" /> Income
+          </Button>
+          <Button variant="outline" size="sm" className="press" onClick={() => openNew('expense')}>
+            <ArrowUpRight className="text-expense" aria-hidden="true" /> Expense
+          </Button>
+        </CardAction>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="text-4xl font-bold tracking-tight sm:text-5xl" aria-live="polite">
+          {balance.data ? (
+            <AnimatedMoney cents={balance.data.balance} className={negative ? 'text-destructive' : 'text-income'} />
+          ) : (
+            <Skeleton className="h-12 w-56" />
+          )}
+        </div>
+        <div className="grid grid-cols-3 gap-3 border-t pt-5">
+          <Stat label="Income" dot="var(--income)" value={analysis ? money(analysis.totals.income) : loadingStat} />
+          <Stat
+            label="Expenses"
+            dot="var(--expense)"
+            value={analysis ? money(analysis.totals.expenses) : loadingStat}
+          />
+          <Stat
+            label="Net"
+            tone={net > 0 ? 'text-income' : net < 0 ? 'text-destructive' : undefined}
+            value={analysis ? money(net, { signed: true }) : loadingStat}
+          />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SavingsCard({ analysis }: { analysis: BudgetAnalysis | null }) {
+  return (
+    <Card className="gap-5">
+      <CardHeader>
+        <div className="flex items-center gap-3">
+          <IconTile icon={PiggyBank} tone="var(--brand)" />
+          <div className="min-w-0">
+            <CardTitle className="text-base">Saved</CardTitle>
+            <CardDescription>Share of income you kept</CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        {!analysis ? (
+          <Skeleton className="h-24" />
+        ) : analysis.totals.income > 0 ? (
+          <SavingsBody analysis={analysis} />
+        ) : (
+          <p className="text-sm text-muted-foreground">Add income for this period to see how much you keep.</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function SavingsBody({ analysis }: { analysis: BudgetAnalysis }) {
+  const money = useMoney();
+  const rate = Math.max(0, analysis.totals.savingsRate);
+  const target = analysis.suggestedSavingsPct;
+  const onTrack = rate >= target;
+  const Trend = onTrack ? TrendingUp : TrendingDown;
+  return (
+    <>
+      <div className="flex items-center justify-between gap-3">
+        <p className="tabular text-4xl font-bold tracking-tight">{formatPercent(rate)}</p>
+        <span
+          className={cn(
+            'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium',
+            onTrack ? 'bg-income-soft text-income' : 'bg-expense-soft text-expense',
+          )}
+        >
+          <Trend className="size-3.5" aria-hidden="true" />
+          {onTrack ? 'On track' : 'Below target'}
+        </span>
+      </div>
+      <div className="space-y-2">
+        <div className="relative h-2.5 rounded-full bg-muted" aria-hidden="true">
+          <div
+            className={cn('grow-x h-full rounded-full', onTrack ? 'bg-income' : 'bg-expense')}
+            style={{ width: `${Math.min(100, rate * 100)}%` }}
+          />
+          <span
+            className="absolute -top-1 h-4.5 w-0.5 rounded-full bg-foreground/70"
+            style={{ left: `${Math.min(100, target * 100)}%` }}
+          />
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Target {formatPercent(target)} ≈ {money(analysis.suggestedSavingsAmount)}/month
+        </p>
       </div>
     </>
+  );
+}
+
+const TIP_STYLE: Record<Insight['severity'], { icon: LucideIcon; className: string }> = {
+  high: { icon: CircleAlert, className: 'text-destructive' },
+  medium: { icon: CircleAlert, className: 'text-warning' },
+  low: { icon: Lightbulb, className: 'text-muted-foreground' },
+  positive: { icon: CircleCheck, className: 'text-income' },
+};
+
+function TipsCard({ tips }: { tips: Insight[] }) {
+  return (
+    <Card className="lg:col-span-2">
+      <CardHeader>
+        <CardTitle className="text-base">Budget tips</CardTitle>
+        <CardDescription>Worked out from your own numbers, refreshed as you log.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {tips.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Nothing to flag right now. Keep logging and tips will appear.</p>
+        ) : (
+          <ul className="space-y-2.5">
+            {tips.map((t) => {
+              const { icon: Icon, className } = TIP_STYLE[t.severity];
+              return (
+                <li
+                  key={t.id}
+                  className={cn(
+                    'flex gap-3 rounded-lg border p-3.5',
+                    t.severity === 'high' ? 'border-destructive/30 bg-destructive/5' : 'bg-muted/40',
+                  )}
+                >
+                  <Icon className={cn('mt-0.5 size-[18px] shrink-0', className)} aria-hidden="true" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{t.title}</p>
+                    <p className="mt-0.5 text-sm text-muted-foreground">{t.detail}</p>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+const GROUP_LABEL = { needs: 'Needs', wants: 'Wants', savings: 'Savings' } as const;
+
+function RuleCard({ analysis }: { analysis: BudgetAnalysis }) {
+  const money = useMoney();
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">50/30/20 check</CardTitle>
+        <CardDescription>Needs, wants and savings as a share of income.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        {analysis.totals.income === 0 ? (
+          <p className="text-sm text-muted-foreground">Add income for this period to compare with the rule.</p>
+        ) : (
+          analysis.rule.map((r) => {
+            const pct = Math.round(r.pct * 100);
+            const ok = r.group === 'savings' ? r.pct >= r.target : r.pct <= r.target;
+            return (
+              <div key={r.group} className="space-y-2">
+                <div className="flex items-baseline justify-between gap-2 text-sm">
+                  <span>
+                    <span className="font-medium">{GROUP_LABEL[r.group]}</span>
+                    <span className="text-muted-foreground"> · target {Math.round(r.target * 100)}%</span>
+                  </span>
+                  <span className={cn('tabular font-semibold', ok ? 'text-income' : 'text-expense')}>
+                    {pct}%{' '}
+                    <span className="font-normal text-muted-foreground">· {money(r.amount, { compact: true })}</span>
+                  </span>
+                </div>
+                <div className="relative h-2 rounded-full bg-muted" aria-hidden="true">
+                  <div
+                    className={cn('grow-x h-full rounded-full', ok ? 'bg-income' : 'bg-expense')}
+                    style={{ width: `${Math.min(100, pct)}%` }}
+                  />
+                  <span
+                    className="absolute -top-1 h-4 w-0.5 rounded-full bg-foreground/60"
+                    style={{ left: `${r.target * 100}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -178,65 +426,110 @@ function RecentCard({ items, today }: { items: Transaction[] | null; today: stri
   const { categories } = useAppData();
   const byId = new Map([...categories.expense, ...categories.income].map((c) => [c.id, c]));
   return (
-    <section className="card card--flush" aria-labelledby="recent-h">
-      <div className="card__head">
-        <h2 id="recent-h">Recent</h2>
-        <Link to="/history" className="link-btn">
-          See all
-        </Link>
+    <Card className="gap-0 pb-0 lg:col-span-2">
+      <CardHeader className="pb-4">
+        <CardTitle className="text-base">Recent transactions</CardTitle>
+        <CardAction>
+          <Button asChild variant="ghost" size="sm">
+            <Link to="/history">View all</Link>
+          </Button>
+        </CardAction>
+      </CardHeader>
+      <div className="divide-y border-t">
+        {items === null ? (
+          <RowsSkeleton rows={4} />
+        ) : items.length === 0 ? (
+          <EmptyState icon={Inbox} title="No transactions yet" />
+        ) : (
+          items
+            .slice(0, 6)
+            .map((t) => <TransactionRow key={t.id} transaction={t} category={byId.get(t.categoryId)} today={today} />)
+        )}
       </div>
-      {items === null ? (
-        <SkeletonList rows={4} />
-      ) : items.length === 0 ? (
-        <EmptyState icon="list" title="No transactions yet" />
-      ) : (
-        <div style={{ marginTop: 8 }}>
-          {items.slice(0, 6).map((t) => (
-            <TransactionRow key={t.id} transaction={t} category={byId.get(t.categoryId)} today={today} />
-          ))}
-        </div>
-      )}
-    </section>
+    </Card>
   );
 }
 
-function Stat({
-  label,
-  value,
-  dot,
-  tone,
-}: {
-  label: string;
-  value: string | null;
-  dot?: string;
-  tone?: 'good' | 'bad';
-}) {
+function UpcomingCard({ today }: { today: string }) {
+  const { recurring, categories } = useAppData();
+  const money = useMoney();
+  const list = upcoming(recurring, today, 30);
   return (
-    <div>
-      <p className="stat__label muted">
-        {dot && <span className="dot" style={{ '--dot': dot } as CSSProperties} />}
-        {label}
-      </p>
-      <p className="stat__value num" data-tone={tone}>
-        {value ?? <Skeleton width={70} height={18} style={{ opacity: 0.4 }} />}
-      </p>
-    </div>
+    <Card className="gap-0 pb-0">
+      <CardHeader className="pb-4">
+        <CardTitle className="text-base">Upcoming</CardTitle>
+        <CardDescription>Recurring, next 30 days</CardDescription>
+        <CardAction>
+          <Button asChild variant="ghost" size="sm">
+            <Link to="/recurring">Manage</Link>
+          </Button>
+        </CardAction>
+      </CardHeader>
+      <div className="border-t">
+        {list.length === 0 ? (
+          <EmptyState icon={CalendarClock} title="Nothing due soon">
+            Add rent, bills and subscriptions under Recurring.
+          </EmptyState>
+        ) : (
+          <ul className="divide-y">
+            {list.map(({ rule, date }) => {
+              const cat = categories.expense.find((c) => c.id === rule.categoryId);
+              return (
+                <li key={rule.id} className="flex min-h-16 items-center gap-3 px-4 py-3 sm:px-6">
+                  <Repeat
+                    className="size-4 shrink-0 text-(--dot)"
+                    style={{ '--dot': cat?.color } as CSSProperties}
+                    aria-hidden="true"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium">{rule.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatDate(date, today)} · {formatInDays(daysBetween(today, date))}
+                    </p>
+                  </div>
+                  <span className="tabular font-semibold">{money(rule.amount)}</span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function FirstRun() {
+  const { openNew } = useQuickAdd();
+  return (
+    <Card className="lg:col-span-3">
+      <EmptyState
+        icon={Wallet}
+        title="Nothing logged for this period"
+        action={
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => openNew('income')}>
+              Add income
+            </Button>
+            <Button onClick={() => openNew('expense')}>Add expense</Button>
+          </div>
+        }
+      >
+        Log income and expenses to see your spending pace, charts and budget tips.
+      </EmptyState>
+    </Card>
   );
 }
 
 function CustomRange({ period, onChange }: { period: Period; onChange: (p: Period) => void }) {
   const tooLong = daysBetween(period.from, period.to) > 3650;
   return (
-    <div className="card" style={{ padding: 16 }}>
-      <div className="grid-2" style={{ gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <div className="field">
-          <label htmlFor="range-from" className="field__label">
-            From
-          </label>
-          <input
+    <Card className="mb-4 animate-in py-4 fade-in slide-in-from-top-1">
+      <CardContent className="grid grid-cols-2 gap-3 px-4 sm:max-w-md">
+        <div className="space-y-1.5">
+          <Label htmlFor="range-from">From</Label>
+          <Input
             id="range-from"
             type="date"
-            className="input"
             value={period.from}
             max={period.to}
             onChange={(e) => {
@@ -245,14 +538,11 @@ function CustomRange({ period, onChange }: { period: Period; onChange: (p: Perio
             }}
           />
         </div>
-        <div className="field">
-          <label htmlFor="range-to" className="field__label">
-            To
-          </label>
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="range-to">To</Label>
+          <Input
             id="range-to"
             type="date"
-            className="input"
             value={period.to}
             min={period.from}
             onChange={(e) => {
@@ -261,280 +551,12 @@ function CustomRange({ period, onChange }: { period: Period; onChange: (p: Perio
             }}
           />
         </div>
-      </div>
-      {tooLong && (
-        <p className="field__error" role="alert" style={{ marginTop: 8 }}>
-          Ranges are limited to 10 years.
-        </p>
-      )}
-    </div>
-  );
-}
-
-function FirstRun() {
-  const { openNew } = useQuickAdd();
-  return (
-    <div className="card">
-      <EmptyState
-        title="Nothing logged for this period"
-        action={
-          <div className="row" style={{ marginTop: 8 }}>
-            <button type="button" className="btn btn--secondary btn--sm" onClick={() => openNew('income')}>
-              Add income
-            </button>
-            <button type="button" className="btn btn--primary btn--sm" onClick={() => openNew('expense')}>
-              Add expense
-            </button>
-          </div>
-        }
-      >
-        Log income and expenses to see charts and personalised budget tips.
-      </EmptyState>
-    </div>
-  );
-}
-
-const TIP_ICON: Record<Insight['severity'], IconName> = {
-  high: 'alert',
-  medium: 'alert',
-  low: 'bulb',
-  positive: 'check',
-};
-
-function Tips({ tips }: { tips: Insight[] }) {
-  if (tips.length === 0) return null;
-  return (
-    <section className="card" aria-labelledby="tips-h">
-      <div className="card__head">
-        <h2 id="tips-h">Budget tips</h2>
-      </div>
-      <ul className="list stack" style={{ gap: 8 }}>
-        {tips.map((t) => (
-          <li key={t.id} className="tip" data-severity={t.severity}>
-            <span className="tip__icon">
-              <Icon name={TIP_ICON[t.severity]} size={18} />
-            </span>
-            <div>
-              <p className="tip__title">{t.title}</p>
-              <p className="tip__detail">{t.detail}</p>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-function Legend({
-  slices,
-  total,
-}: {
-  slices: Slice[] | { id: string; name: string; color: string; value: number }[];
-  total: number;
-}) {
-  const money = useMoney();
-  const top = slices.slice(0, 5);
-  const rest = slices.slice(5).reduce((acc, s) => acc + s.value, 0);
-  const rows = rest > 0 ? [...top, { id: 'rest', name: 'Others', color: '#94a3b8', value: rest }] : top;
-  return (
-    <ul className="legend">
-      {rows.map((s) => (
-        <li key={s.id}>
-          <span className="dot" style={{ '--dot': s.color } as CSSProperties} />
-          <span className="legend__name">{s.name}</span>
-          <span className="num small">{money(s.value, { compact: true })}</span>
-          <span className="num xs muted legend__pct">{formatPercent(total > 0 ? s.value / total : 0)}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function DonutCard({ title, slices, total, empty }: { title: string; slices: Slice[]; total: number; empty: string }) {
-  const money = useMoney();
-  return (
-    <section className="card">
-      <div className="card__head">
-        <h2>{title}</h2>
-      </div>
-      {total === 0 ? (
-        <p className="muted small">{empty}</p>
-      ) : (
-        <div className="donut-wrap">
-          <Donut
-            label={`${title}: ${slices.map((s) => `${s.name} ${formatPercent(s.share)}`).join(', ')}`}
-            slices={slices.map((s) => ({ id: s.id, label: s.name, value: s.value, color: s.color }))}
-            center={
-              <>
-                <span className="donut__value num">{money(total, { compact: true })}</span>
-                <span className="xs muted">total</span>
-              </>
-            }
-          />
-          <Legend slices={slices} total={total} />
-        </div>
-      )}
-    </section>
-  );
-}
-
-function SplitCard({ analysis }: { analysis: BudgetAnalysis }) {
-  const money = useMoney();
-  const { income, expenses } = analysis.totals;
-  const savedPct = Math.max(0, analysis.totals.savingsRate);
-  // Consumption excludes transfers into savings categories.
-  const consumption = Math.round(income * (1 - analysis.totals.savingsRate));
-  const saved = Math.max(0, income - consumption);
-  const over = Math.max(0, consumption - income);
-  const slices = [
-    { id: 'spent', name: 'Spent', color: 'var(--expense)', value: Math.min(consumption, income) },
-    { id: 'saved', name: 'Saved', color: 'var(--income)', value: saved },
-    ...(over > 0 ? [{ id: 'over', name: 'Overspent', color: 'var(--danger)', value: over }] : []),
-  ];
-  return (
-    <section className="card">
-      <div className="card__head">
-        <h2>Income vs. expenses</h2>
-      </div>
-      {income === 0 ? (
-        <p className="muted small">Add income to see your savings split.</p>
-      ) : (
-        <div className="donut-wrap">
-          <Donut
-            label={`Saved ${formatPercent(savedPct)} of income`}
-            slices={slices.map((s) => ({ id: s.id, label: s.name, value: s.value, color: s.color }))}
-            center={
-              <>
-                <span className="donut__value num">{formatPercent(savedPct)}</span>
-                <span className="xs muted">saved</span>
-              </>
-            }
-          />
-          <ul className="legend">
-            <li>
-              <span className="dot" style={{ '--dot': 'var(--income)' } as CSSProperties} />
-              <span className="legend__name">Income</span>
-              <span className="num small">{money(income, { compact: true })}</span>
-            </li>
-            <li>
-              <span className="dot" style={{ '--dot': 'var(--expense)' } as CSSProperties} />
-              <span className="legend__name">Expenses</span>
-              <span className="num small">{money(expenses, { compact: true })}</span>
-            </li>
-            <li>
-              <span
-                className="dot"
-                style={{ '--dot': over > 0 ? 'var(--danger)' : 'var(--income)' } as CSSProperties}
-              />
-              <span className="legend__name">{over > 0 ? 'Overspent' : 'Saved'}</span>
-              <span className="num small">{money(over > 0 ? over : saved, { compact: true })}</span>
-            </li>
-          </ul>
-        </div>
-      )}
-    </section>
-  );
-}
-
-const GROUP_LABEL = { needs: 'Needs', wants: 'Wants', savings: 'Savings' } as const;
-
-function RuleCard({ analysis }: { analysis: BudgetAnalysis }) {
-  const money = useMoney();
-  if (analysis.totals.income === 0) {
-    return (
-      <section className="card">
-        <div className="card__head">
-          <h2>50/30/20 check</h2>
-        </div>
-        <p className="muted small">Add income for this period to compare against the 50/30/20 rule.</p>
-      </section>
-    );
-  }
-  return (
-    <section className="card" aria-labelledby="rule-h">
-      <div className="card__head">
-        <h2 id="rule-h">50/30/20 check</h2>
-        <span className="muted xs">share of income</span>
-      </div>
-      <div className="stack" style={{ gap: 14 }}>
-        {analysis.rule.map((r) => {
-          const pct = Math.round(r.pct * 100);
-          const ok = r.group === 'savings' ? r.pct >= r.target : r.pct <= r.target;
-          return (
-            <div key={r.group}>
-              <div className="row row--between small" style={{ marginBottom: 6 }}>
-                <span>
-                  <strong>{GROUP_LABEL[r.group]}</strong>{' '}
-                  <span className="muted">· target {Math.round(r.target * 100)}%</span>
-                </span>
-                <span className="num" style={{ color: ok ? 'var(--income)' : 'var(--expense)', fontWeight: 600 }}>
-                  {pct}% · {money(r.amount, { compact: true })}
-                </span>
-              </div>
-              <div className="bar" aria-hidden="true">
-                <div
-                  className="bar__fill"
-                  style={
-                    {
-                      width: `${Math.min(100, pct)}%`,
-                      '--bar': ok ? 'var(--income)' : 'var(--expense)',
-                    } as CSSProperties
-                  }
-                />
-                <div className="bar__target" style={{ left: `${r.target * 100}%` }} />
-              </div>
-            </div>
-          );
-        })}
-        <p className="small muted">
-          Suggested savings target:{' '}
-          <strong style={{ color: 'var(--text)' }}>{formatPercent(analysis.suggestedSavingsPct)}</strong> ≈{' '}
-          {money(analysis.suggestedSavingsAmount)}/month
-          {analysis.recurringMonthly > 0 && <> · Recurring: {formatPercent(analysis.recurringPctOfIncome)} of income</>}
-        </p>
-      </div>
-    </section>
-  );
-}
-
-function UpcomingCard({ today, categories }: { today: string; categories: Category[] }) {
-  const { recurring } = useAppData();
-  const money = useMoney();
-  const list = upcoming(recurring, today, 30);
-  return (
-    <section className="card card--flush" aria-labelledby="upcoming-h">
-      <div className="card__head">
-        <h2 id="upcoming-h">Upcoming recurring</h2>
-        <Link to="/recurring" className="link-btn">
-          Manage
-        </Link>
-      </div>
-      {list.length === 0 ? (
-        <EmptyState icon="repeat" title="Nothing due in the next 30 days">
-          Add rent, subscriptions and bills under Recurring.
-        </EmptyState>
-      ) : (
-        <ul className="list" style={{ marginTop: 8 }}>
-          {list.map(({ rule, date }) => {
-            const cat = categories.find((c) => c.id === rule.categoryId);
-            const days = daysBetween(today, date);
-            return (
-              <li key={rule.id} className="list-item">
-                <span className="dot" style={{ '--dot': cat?.color } as CSSProperties} />
-                <span className="list-item__main">
-                  <span className="list-item__title" style={{ display: 'block' }}>
-                    {rule.name}
-                  </span>
-                  <span className="list-item__sub" style={{ display: 'block' }}>
-                    {formatDate(date, today)} · {formatInDays(days)}
-                  </span>
-                </span>
-                <span className="amount">{money(rule.amount)}</span>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </section>
+        {tooLong && (
+          <p className="col-span-2 text-sm text-destructive" role="alert">
+            Ranges are limited to 10 years.
+          </p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
