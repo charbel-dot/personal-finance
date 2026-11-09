@@ -24,7 +24,7 @@ export function TransactionRow({ transaction: t, category, showDate = true, toda
       type="button"
       onClick={() => openEdit(t)}
       aria-label={`${name}, ${income ? 'income' : 'expense'} ${money(t.amount)}${t.note ? `, ${t.note}` : ''}, ${formatDate(t.date, today)}. Edit`}
-      className="group flex min-h-16 w-full items-center gap-3 px-4 py-3 text-left transition-colors outline-none hover:bg-accent/60 focus-visible:bg-accent sm:px-6"
+      className="group flex min-h-16 w-full items-center gap-3 px-5 py-3 text-left transition-colors outline-none hover:bg-accent/60 focus-visible:bg-accent"
     >
       <span
         className="size-2.5 shrink-0 rounded-full bg-(--dot) ring-4 ring-(--dot)/15"

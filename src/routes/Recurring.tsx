@@ -8,7 +8,7 @@ import type { Frequency, Recurring as Rule, RecurringInput } from '../../shared/
 import { CategoryPicker } from '@/components/CategoryPicker';
 import { EmptyState } from '@/components/Feedback';
 import { Page, PageHeader } from '@/components/Layout';
-import { ResponsiveSheet } from '@/components/ResponsiveSheet';
+import { ResponsiveSheet, SheetFooter } from '@/components/ResponsiveSheet';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -64,7 +64,7 @@ export default function Recurring() {
         subtitle="Bills and subscriptions that log themselves when due."
         actions={
           <Button className="press" onClick={() => openSheet()}>
-            <Plus aria-hidden="true" /> New recurring
+            <Plus aria-hidden="true" /> New Recurring
           </Button>
         }
       />
@@ -98,8 +98,8 @@ export default function Recurring() {
           {sorted.length === 0 ? (
             <EmptyState
               icon={Repeat}
-              title="No recurring expenses yet"
-              action={<Button onClick={() => openSheet()}>Add your first</Button>}
+              title="No Recurring Expenses Yet"
+              action={<Button onClick={() => openSheet()}>Add Your First</Button>}
             >
               Rent, subscriptions and bills are added to your history automatically on each due date.
             </EmptyState>
@@ -123,7 +123,7 @@ export default function Recurring() {
       <ResponsiveSheet
         open={sheet.open}
         onClose={() => setSheet((s) => ({ ...s, open: false }))}
-        title={sheet.rule ? 'Edit recurring expense' : 'New recurring expense'}
+        title={sheet.rule ? 'Edit Recurring Expense' : 'New Recurring Expense'}
       >
         <RecurringForm key={sheet.nonce} rule={sheet.rule} onDone={() => setSheet((s) => ({ ...s, open: false }))} />
       </ResponsiveSheet>
@@ -142,7 +142,7 @@ function RuleRow({ rule, color, today, onEdit }: { rule: Rule; color?: string; t
       await save.mutateAsync({ id: rule.id, input: toInput(rule, { paused: !rule.paused }) });
       toast.success(rule.paused ? `${rule.name} resumed` : `${rule.name} paused`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not update');
+      toast.error(err instanceof Error ? err.message : 'Couldn’t update. Check your connection and try again.');
     }
   }
 
@@ -158,12 +158,12 @@ function RuleRow({ rule, color, today, onEdit }: { rule: Rule; color?: string; t
       await remove.mutateAsync(rule.id);
       toast.success('Recurring expense deleted');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not delete');
+      toast.error(err instanceof Error ? err.message : 'Couldn’t delete. Check your connection and try again.');
     }
   }
 
   return (
-    <li className={cn('flex min-h-18 items-center gap-3 pr-2 pl-4 sm:pl-6', rule.paused && 'opacity-60')}>
+    <li className={cn('flex min-h-18 items-center gap-3 pr-2 pl-5', rule.paused && 'opacity-60')}>
       <span
         className="size-2.5 shrink-0 rounded-full bg-(--dot) ring-4 ring-(--dot)/15"
         style={{ '--dot': color ?? 'var(--muted-foreground)' } as CSSProperties}
@@ -234,7 +234,12 @@ function RecurringForm({ rule, onDone }: { rule?: Rule; onDone: () => void }) {
     if (!categoryId) next.categoryId = 'Pick a category';
     if (!isValidIsoDate(startDate)) next.startDate = 'Pick a valid date';
     setErrors(next);
-    if (Object.keys(next).length > 0 || cents === null) return;
+    if (Object.keys(next).length > 0 || cents === null) {
+      const first = next.name ? ids.name : next.amount ? ids.amount : next.startDate ? ids.start : null;
+      if (first) document.getElementById(first)?.focus();
+      else document.querySelector<HTMLInputElement>('input[name="recurring-category"]')?.focus();
+      return;
+    }
     try {
       await save.mutateAsync({
         id: rule?.id,
@@ -251,19 +256,21 @@ function RecurringForm({ rule, onDone }: { rule?: Rule; onDone: () => void }) {
       toast.success(rule ? 'Recurring expense updated' : 'Recurring expense added');
       onDone();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not save');
+      toast.error(err instanceof Error ? err.message : 'Couldn’t save. Check your connection and try again.');
     }
   }
 
   return (
-    <form className="space-y-5" onSubmit={(e) => void onSubmit(e)} noValidate>
+    <form className="space-y-5 pt-1" onSubmit={(e) => void onSubmit(e)} noValidate>
       <div className="space-y-2">
         <Label htmlFor={ids.name}>Name</Label>
         <Input
           id={ids.name}
           value={name}
           maxLength={60}
-          placeholder="e.g. Rent, Netflix"
+          placeholder="e.g. Rent, Netflix…"
+          name="name"
+          autoComplete="off"
           data-autofocus={rule ? undefined : true}
           aria-invalid={Boolean(errors.name)}
           onChange={(e) => setName(e.target.value)}
@@ -277,6 +284,7 @@ function RecurringForm({ rule, onDone }: { rule?: Rule; onDone: () => void }) {
           <Input
             id={ids.amount}
             className="tabular h-11"
+            name="amount"
             inputMode="decimal"
             autoComplete="off"
             placeholder="0.00"
@@ -315,6 +323,8 @@ function RecurringForm({ rule, onDone }: { rule?: Rule; onDone: () => void }) {
           <Input
             id={ids.start}
             type="date"
+            name="startDate"
+            autoComplete="off"
             value={startDate}
             aria-invalid={Boolean(errors.startDate)}
             onChange={(e) => setStartDate(e.target.value)}
@@ -338,10 +348,12 @@ function RecurringForm({ rule, onDone }: { rule?: Rule; onDone: () => void }) {
       <p className="text-xs text-muted-foreground">
         Added automatically on each due date. Dates before this month aren’t back-filled.
       </p>
-      <Button type="submit" className="press h-11 w-full text-base" disabled={save.isPending}>
-        {save.isPending && <Loader2 className="animate-spin" aria-hidden="true" />}
-        {rule ? 'Save changes' : 'Add recurring expense'}
-      </Button>
+      <SheetFooter>
+        <Button type="submit" className="press h-11 flex-1 text-base" disabled={save.isPending}>
+          {save.isPending && <Loader2 className="animate-spin" aria-hidden="true" />}
+          {rule ? 'Save Changes' : 'Add Recurring Expense'}
+        </Button>
+      </SheetFooter>
     </form>
   );
 }

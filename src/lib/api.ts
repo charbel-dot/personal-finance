@@ -59,10 +59,10 @@ export const api = {
   login: (input: LoginInput) => request<{ ok: true }>('POST', '/auth/login', input),
   logout: () => request<{ ok: true }>('POST', '/auth/logout', {}),
   me: () =>
-    request<{ authenticated: true; remember: boolean; expiresAt: number } | { authenticated: false }>(
-      'GET',
-      '/auth/me',
-    ),
+    request<
+      | { authenticated: true; username: string; remember: boolean; issuedAt: number; expiresAt: number }
+      | { authenticated: false }
+    >('GET', '/auth/me'),
   bootstrap: () => request<Bootstrap>('GET', '/bootstrap'),
   balance: () => request<Balance>('GET', '/balance'),
   transactions: (range?: { from: string; to: string }) =>

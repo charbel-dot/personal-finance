@@ -33,6 +33,7 @@ export default function Login() {
     e.preventDefault();
     if (!username.trim() || !password) {
       setError('Enter your username and password.');
+      document.getElementById(username.trim() ? ids.pass : ids.user)?.focus();
       return;
     }
     setPending(true);
@@ -70,7 +71,7 @@ export default function Login() {
               <Sparkline className="mt-2 h-12" />
             </div>
           </div>
-          <h1 className="text-3xl font-semibold tracking-tight">Welcome back</h1>
+          <h1 className="text-3xl font-semibold tracking-tight">Welcome Back</h1>
           <p className="mt-2 text-muted-foreground">Sign in to see where your money went.</p>
 
           <form
@@ -134,15 +135,14 @@ export default function Login() {
                 </p>
               )}
             </div>
-            <div className="flex items-center gap-2.5">
+            {/* One hit target: the whole row toggles the checkbox. */}
+            <Label htmlFor={ids.remember} className="flex w-fit items-center gap-2.5 py-1 font-normal">
               <Checkbox id={ids.remember} checked={remember} onCheckedChange={(v) => setRemember(v === true)} />
-              <Label htmlFor={ids.remember} className="font-normal">
-                Keep me signed in for 30 days
-              </Label>
-            </div>
+              Keep me signed in for 30 days
+            </Label>
             <Button type="submit" className="press h-11 w-full text-base" disabled={pending}>
               {pending && <Loader2 className="animate-spin" aria-hidden="true" />}
-              {pending ? 'Signing in…' : 'Sign in'}
+              {pending ? 'Signing In…' : 'Sign In'}
             </Button>
           </form>
 

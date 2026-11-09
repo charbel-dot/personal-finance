@@ -1,6 +1,6 @@
 import { Inbox, ListFilter, Search, X } from 'lucide-react';
 import { useDeferredValue, useMemo, useState } from 'react';
-import { addMonthsClamped, endOfMonth, startOfMonth } from '../../shared/dates';
+import { addMonthsClamped, endOfMonth, isValidIsoDate, startOfMonth } from '../../shared/dates';
 import type { Category, Transaction } from '../../shared/schema';
 import { EmptyState, ErrorMessage, RowsSkeleton } from '@/components/Feedback';
 import { Page, PageHeader } from '@/components/Layout';
@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { pick, useUrlState } from '@/hooks/use-url-state';
 import { formatDayHeading, useMoney } from '@/lib/format';
 import { useAppData, useTransactions } from '@/lib/queries';
 import { localToday, localYesterday } from '@/lib/today';
@@ -48,11 +49,26 @@ export default function History() {
   const money = useMoney();
   const today = localToday();
 
-  const [query, setQuery] = useState('');
-  const [type, setType] = useState<TypeFilter>('all');
-  const [categoryId, setCategoryId] = useState('all');
-  const [rangeKind, setRangeKind] = useState<RangeKind>('3months');
-  const [custom, setCustom] = useState<Range>(() => ({ from: startOfMonth(today), to: today }));
+  // Filters live in the URL (?q=&type=&category=&range=&from=&to=) so they are shareable and survive Back.
+  const [params, update] = useUrlState();
+  const query = params.get('q') ?? '';
+  const type = pick<TypeFilter>(params.get('type'), ['all', 'income', 'expense'], 'all');
+  const categoryId = params.get('category') ?? 'all';
+  const rangeKind = pick<RangeKind>(params.get('range'), ['month', '3months', 'year', 'all', 'custom'], '3months');
+  const fromParam = params.get('from') ?? '';
+  const toParam = params.get('to') ?? '';
+  const custom: Range = {
+    from: isValidIsoDate(fromParam) ? fromParam : startOfMonth(today),
+    to: isValidIsoDate(toParam) ? toParam : today,
+  };
+  const setQuery = (q: string) => update({ q });
+  const setType = (t: TypeFilter) => update({ type: t === 'all' ? null : t, category: null });
+  const setCategoryId = (id: string) => update({ category: id === 'all' ? null : id });
+  const setRangeKind = (r: RangeKind) => update({ range: r === '3months' ? null : r });
+  const setCustom = (fn: (prev: Range) => Range) => {
+    const next = fn(custom);
+    update({ from: next.from, to: next.to });
+  };
   const [limit, setLimit] = useState(PAGE);
   const deferredQuery = useDeferredValue(query.trim().toLowerCase());
 
@@ -86,11 +102,7 @@ export default function History() {
   }, [filtered]);
 
   const hasFilters = query !== '' || type !== 'all' || categoryId !== 'all';
-  const clear = () => {
-    setQuery('');
-    setType('all');
-    setCategoryId('all');
-  };
+  const clear = () => update({ q: null, type: null, category: null });
 
   return (
     <Page>
@@ -108,7 +120,9 @@ export default function History() {
           <Input
             id="history-search"
             type="search"
-            placeholder="Search notes, categories, amounts"
+            placeholder="Search notes, categories, amounts…"
+            name="q"
+            autoComplete="off"
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
@@ -136,7 +150,6 @@ export default function History() {
             value={type}
             onValueChange={(v) => {
               setType(v as TypeFilter);
-              setCategoryId('all');
             }}
           >
             <SelectTrigger aria-label="Type" className="h-10 shrink-0">
@@ -275,17 +288,17 @@ function HistoryList({ status, error, onRetry, filtered, limit, onMore, hasFilte
     return hasFilters ? (
       <EmptyState
         icon={Search}
-        title="No matches"
+        title="No Matches"
         action={
           <Button variant="outline" size="sm" onClick={onClear}>
-            Clear filters
+            Clear Filters
           </Button>
         }
       >
         Try a different search or filter.
       </EmptyState>
     ) : (
-      <EmptyState icon={Inbox} title="No transactions in this range">
+      <EmptyState icon={Inbox} title="No Transactions in This Range">
         Tap + to add your first one.
       </EmptyState>
     );
@@ -296,7 +309,7 @@ function HistoryList({ status, error, onRetry, filtered, limit, onMore, hasFilte
       {filtered.length > limit && (
         <div className="border-t p-4">
           <Button variant="outline" className="w-full" onClick={onMore}>
-            Show more
+            Show More
           </Button>
         </div>
       )}
@@ -318,8 +331,12 @@ function DayGroups({ items }: { items: Transaction[] }) {
         const net = dayItems.reduce((acc, t) => acc + (t.type === 'income' ? t.amount : -t.amount), 0);
         const heading = formatDayHeading(date, today, yesterday);
         return (
-          <section key={date} aria-label={heading}>
-            <div className="sticky top-0 z-10 flex justify-between border-b bg-muted px-4 py-2 text-sm font-medium text-muted-foreground sm:px-6">
+          <section
+            key={date}
+            aria-label={heading}
+            className="animate-in duration-300 fade-in [contain-intrinsic-size:auto_240px] [content-visibility:auto]"
+          >
+            <div className="sticky top-0 z-10 flex justify-between border-b bg-muted px-5 py-2 text-sm font-medium text-muted-foreground">
               <span>{heading}</span>
               <span className="tabular">{money(net, { signed: true })}</span>
             </div>

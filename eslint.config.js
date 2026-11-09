@@ -52,6 +52,7 @@ export default tseslint.config(
     files: ['src/components/ui/**/*.tsx'],
     rules: {
       'react-refresh/only-export-components': 'off',
+      'jsx-a11y/heading-has-content': 'off',
       '@typescript-eslint/restrict-template-expressions': 'off',
       '@typescript-eslint/no-unnecessary-condition': 'off',
       '@typescript-eslint/no-unsafe-assignment': 'off',

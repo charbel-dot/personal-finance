@@ -16,6 +16,8 @@ const Dashboard = lazy(() => import('./routes/Dashboard'));
 const History = lazy(() => import('./routes/History'));
 const Recurring = lazy(() => import('./routes/Recurring'));
 const Settings = lazy(() => import('./routes/Settings'));
+const Categories = lazy(() => import('./routes/Categories'));
+const Account = lazy(() => import('./routes/Account'));
 const NotFound = lazy(() => import('./routes/NotFound'));
 
 function Splash() {
@@ -80,6 +82,8 @@ export function App() {
                 <Route index element={<Dashboard />} />
                 <Route path="history" element={<History />} />
                 <Route path="recurring" element={<Recurring />} />
+                <Route path="categories" element={<Categories />} />
+                <Route path="account" element={<Account />} />
                 <Route path="settings" element={<Settings />} />
                 <Route path="*" element={<NotFound />} />
               </Route>

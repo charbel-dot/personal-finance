@@ -39,6 +39,10 @@ Browser ──► Cloudflare Pages ── static SPA (dist/)
   costs as a share of income. The top 3 tips are shown and refresh as your data changes.
 - **History**: search (notes, category, amount), filters for type, category and date range, grouped by
   day, tap a row to edit or delete.
+- **Categories**: its own page with expense categories grouped by Needs / Wants / Savings and income
+  sources, each with this month's total. Edit name, colour and budget group; archive and restore.
+- **Account**: your session (signed in, expiry, remember me), data stats, CSV export and a full JSON
+  backup, plus the steps to change the password.
 - **Settings**: currency (default USD), light, dark or system theme, opening balance, categories and
   income sources.
 

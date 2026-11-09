@@ -9,10 +9,10 @@ export default function NotFound() {
     <Page className="pt-16">
       <EmptyState
         icon={Compass}
-        title="Page not found"
+        title="Page Not Found"
         action={
           <Button asChild>
-            <Link to="/">Back to overview</Link>
+            <Link to="/">Back to Overview</Link>
           </Button>
         }
       >

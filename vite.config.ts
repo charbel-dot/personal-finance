@@ -61,7 +61,7 @@ export default defineConfig({
           if (id.includes('node_modules')) {
             if (/[\\/](react|react-dom|scheduler|react-router)[\\/]/.test(id)) return 'react';
             if (id.includes('@tanstack')) return 'query';
-            if (/[\\/](radix-ui|@radix-ui|vaul|sonner|lucide-react)[\\/]/.test(id)) return 'ui';
+            if (/[\\/](radix-ui|@radix-ui|sonner|lucide-react)[\\/]/.test(id)) return 'ui';
           }
           return undefined;
         },

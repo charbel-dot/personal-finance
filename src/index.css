@@ -132,6 +132,7 @@
   }
   html {
     @apply font-sans;
+    touch-action: manipulation;
     -webkit-text-size-adjust: 100%;
     -webkit-tap-highlight-color: transparent;
     scrollbar-color: var(--secondary) transparent;
@@ -141,6 +142,29 @@
     @apply bg-background text-foreground antialiased;
     min-height: 100dvh;
     font-feature-settings: 'cv11', 'ss01';
+  }
+  /* Pointer on everything clickable; not-allowed when disabled. */
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  [role='tab']:not([aria-disabled='true']),
+  [role='option']:not([data-disabled]),
+  [role='menuitem']:not([data-disabled]),
+  [role='radio']:not([data-disabled]),
+  [role='checkbox']:not([data-disabled]),
+  [role='combobox']:not([data-disabled]),
+  a[href],
+  summary,
+  select:not(:disabled),
+  input[type='checkbox']:not(:disabled),
+  input[type='radio']:not(:disabled),
+  input[type='color']:not(:disabled),
+  label:has(> input[type='radio'], > input[type='checkbox'], > input[type='color']) {
+    cursor: pointer;
+  }
+  button:disabled,
+  [aria-disabled='true'],
+  [data-disabled] {
+    cursor: not-allowed;
   }
   ::selection {
     background: color-mix(in oklch, var(--income) 30%, transparent);
@@ -168,6 +192,13 @@
   }
   .dark input[type='date']::-webkit-calendar-picker-indicator {
     filter: invert(1);
+  }
+}
+
+/* Desktop: no rubber-band on the page. Touch keeps native pull-to-refresh and swipe-back. */
+@media (pointer: fine) {
+  html {
+    overscroll-behavior: none;
   }
 }
 

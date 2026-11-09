@@ -166,7 +166,17 @@ export function createApp() {
   // Session probe: public so the logged-out state is a normal 200, not a console-visible 401.
   app.get('/auth/me', async (c) => {
     const s = await verifyToken(c.env, readCookie(c.req.header('Cookie'), SESSION_COOKIE));
-    return c.json(s ? { authenticated: true, remember: s.remember, expiresAt: s.expiresAt } : { authenticated: false });
+    return c.json(
+      s
+        ? {
+            authenticated: true,
+            username: c.env.AUTH_USERNAME,
+            remember: s.remember,
+            issuedAt: s.issuedAt,
+            expiresAt: s.expiresAt,
+          }
+        : { authenticated: false },
+    );
   });
 
   // Everything below requires a valid session.

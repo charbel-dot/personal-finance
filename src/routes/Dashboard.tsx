@@ -13,10 +13,10 @@ import {
   Wallet,
   type LucideIcon,
 } from 'lucide-react';
-import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { useMemo, type CSSProperties, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { analyzeBudget, type BudgetAnalysis, type Insight } from '../../shared/budget';
-import { addDays, daysBetween } from '../../shared/dates';
+import { addDays, daysBetween, isValidIsoDate } from '../../shared/dates';
 import { formatPercent } from '../../shared/money';
 import { upcoming } from '../../shared/recurring';
 import type { Transaction } from '../../shared/schema';
@@ -31,16 +31,17 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useQuickAdd } from '@/context/quickAdd';
 import { useCountUp } from '@/hooks/use-count-up';
+import { pick, useUrlState } from '@/hooks/use-url-state';
 import { formatDate, formatInDays, useMoney } from '@/lib/format';
 import { resolvePeriod, type Period, type PeriodKind } from '@/lib/period';
-import { useAppData, useBalance, useTransactions } from '@/lib/queries';
+import { useAppData, useBalance, useMe, useTransactions } from '@/lib/queries';
 import { localToday } from '@/lib/today';
 import { cn } from '@/lib/utils';
 import { CategoryCard, PaceCard } from './DashboardCharts';
 
 const PERIODS: { kind: PeriodKind; label: string }[] = [
-  { kind: 'this-month', label: 'This month' },
-  { kind: 'last-month', label: 'Last month' },
+  { kind: 'this-month', label: 'This Month' },
+  { kind: 'last-month', label: 'Last Month' },
   { kind: 'custom', label: 'Custom' },
 ];
 
@@ -55,17 +56,89 @@ function greeting(hour: number) {
   if (hour < 5) return 'Good night';
   if (hour < 12) return 'Good morning';
   if (hour < 18) return 'Good afternoon';
-  return 'Good evening';
+  if (hour < 22) return 'Good evening';
+  return 'Good night';
+}
+
+/** "charbel.nasseh" → "Charbel": first word of the username, capitalised. */
+function firstName(username: string | undefined) {
+  const word = username?.split(/[\s._@-]+/).find(Boolean);
+  return word ? word.charAt(0).toUpperCase() + word.slice(1) : null;
 }
 
 type Range = { from: string; to: string };
+
+/** Dashboard period, kept in the URL (?period=last-month or ?period=custom&from=&to=). */
+function useDashboardPeriod(today: string) {
+  const [params, update] = useUrlState();
+  const fromParam = params.get('from') ?? '';
+  const toParam = params.get('to') ?? '';
+  const period: Period = {
+    kind: pick<PeriodKind>(params.get('period'), ['this-month', 'last-month', 'custom'], 'this-month'),
+    from: isValidIsoDate(fromParam) ? fromParam : addDays(today, -29),
+    to: isValidIsoDate(toParam) ? toParam : today,
+  };
+  const setPeriod = (next: Period) => {
+    update({
+      period: next.kind === 'this-month' ? null : next.kind,
+      from: next.kind === 'custom' ? next.from : null,
+      to: next.kind === 'custom' ? next.to : null,
+    });
+  };
+  return [period, setPeriod] as const;
+}
+
+function DashboardHeader({
+  period,
+  onPeriod,
+  spentToday,
+}: {
+  period: Period;
+  onPeriod: (p: Period) => void;
+  spentToday: number;
+}) {
+  const money = useMoney();
+  const me = useMe();
+  const name = firstName(me.data?.authenticated ? me.data.username : undefined);
+  const now = new Date();
+  return (
+    <PageHeader
+      title={name ? `${greeting(now.getHours())}, ${name}` : greeting(now.getHours())}
+      subtitle={
+        <>
+          {longDate.format(now)}
+          {spentToday > 0 && (
+            <>
+              {' · '}
+              <span className="font-medium text-foreground">{money(spentToday)}</span> spent today
+            </>
+          )}
+        </>
+      }
+      actions={
+        <Tabs value={period.kind} onValueChange={(v) => onPeriod({ ...period, kind: v as PeriodKind })}>
+          <TabsList className="h-10">
+            {PERIODS.map((p) => (
+              <TabsTrigger key={p.kind} value={p.kind} className="px-3">
+                {p.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+      }
+    />
+  );
+}
 
 export default function Dashboard() {
   const { categories, recurring } = useAppData();
   const money = useMoney();
   const today = localToday();
-  const [period, setPeriod] = useState<Period>(() => ({ kind: 'this-month', from: addDays(today, -29), to: today }));
-  const resolved = useMemo(() => resolvePeriod(period, today), [period, today]);
+  const [period, setPeriod] = useDashboardPeriod(today);
+  const resolved = useMemo(
+    () => resolvePeriod({ kind: period.kind, from: period.from, to: period.to }, today),
+    [period.kind, period.from, period.to, today],
+  );
   const { current: curRange, previous: prevRange, days: periodDays } = resolved;
   const tx = useTransactions({ from: prevRange.from, to: curRange.to });
 
@@ -81,30 +154,17 @@ export default function Dashboard() {
     };
   }, [tx.data, curRange, prevRange, periodDays, categories, recurring, money]);
 
+  const spentToday = (tx.data ?? [])
+    .filter((t) => t.date === today && t.type === 'expense')
+    .reduce((a, t) => a + t.amount, 0);
   const status = tx.isError ? 'error' : tx.isPending ? 'loading' : current.length === 0 ? 'empty' : 'ready';
-  const now = new Date();
-
   return (
     <Page>
-      <PageHeader
-        title={greeting(now.getHours())}
-        subtitle={longDate.format(now)}
-        actions={
-          <Tabs value={period.kind} onValueChange={(v) => setPeriod((p) => ({ ...p, kind: v as PeriodKind }))}>
-            <TabsList className="h-10">
-              {PERIODS.map((p) => (
-                <TabsTrigger key={p.kind} value={p.kind} className="px-3">
-                  {p.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
-        }
-      />
+      <DashboardHeader period={period} onPeriod={setPeriod} spentToday={spentToday} />
 
       {period.kind === 'custom' && <CustomRange period={period} onChange={setPeriod} />}
 
-      <div className="stagger grid gap-4 lg:grid-cols-3">
+      <div className="stagger grid gap-3 sm:gap-4 lg:grid-cols-3">
         <BalanceCard label={resolved.label} analysis={status === 'loading' ? null : analysis} />
         <SavingsCard analysis={status === 'loading' ? null : analysis} />
         <Insights
@@ -162,16 +222,18 @@ function Insights({
       <RuleCard analysis={analysis} />
       <CategoryCard
         className="lg:col-span-2"
-        title="Spending by category"
+        title="Spending by Category"
         empty="No expenses in this period."
         slices={analysis.expensesByCategory}
         total={analysis.totals.expenses}
+        range={cur}
       />
       <CategoryCard
-        title="Income by source"
+        title="Income by Source"
         empty="No income in this period."
         slices={analysis.incomeBySource}
         total={analysis.totals.income}
+        range={cur}
       />
     </>
   );
@@ -179,13 +241,23 @@ function Insights({
 
 /* --------------------------------------------------------------------------- pieces */
 
-function AnimatedMoney({ cents, className }: { cents: number; className?: string }) {
+function AnimatedMoney({ cents, className, signed }: { cents: number; className?: string; signed?: boolean }) {
   const money = useMoney();
   const value = useCountUp(cents);
   return (
     <span className={cn('tabular', className)}>
-      <span className="sr-only">{money(cents)}</span>
-      <span aria-hidden="true">{money(value)}</span>
+      <span className="sr-only">{money(cents, { signed })}</span>
+      <span aria-hidden="true">{money(value, { signed })}</span>
+    </span>
+  );
+}
+
+/** Small pulsing dot that marks a figure as live. */
+function LiveDot({ className }: { className?: string }) {
+  return (
+    <span className={cn('relative inline-flex size-2', className)} aria-hidden="true">
+      <span className="absolute inset-0 animate-ping rounded-full bg-income opacity-60" />
+      <span className="relative inline-flex size-2 rounded-full bg-income" />
     </span>
   );
 }
@@ -216,7 +288,6 @@ function Stat({ label, value, dot, tone }: { label: string; value: ReactNode; do
 
 function BalanceCard({ label, analysis }: { label: string; analysis: BudgetAnalysis | null }) {
   const balance = useBalance();
-  const money = useMoney();
   const { openNew } = useQuickAdd();
   const net = analysis?.totals.net ?? 0;
   const negative = (balance.data?.balance ?? 0) < 0;
@@ -227,7 +298,9 @@ function BalanceCard({ label, analysis }: { label: string; analysis: BudgetAnaly
         <div className="flex items-center gap-3">
           <IconTile icon={Wallet} tone="var(--income)" />
           <div className="min-w-0">
-            <CardTitle className="text-base">Current balance</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-base">
+              Current Balance <LiveDot />
+            </CardTitle>
             <CardDescription>{label}</CardDescription>
           </div>
         </div>
@@ -249,16 +322,20 @@ function BalanceCard({ label, analysis }: { label: string; analysis: BudgetAnaly
           )}
         </div>
         <div className="grid grid-cols-3 gap-3 border-t pt-5">
-          <Stat label="Income" dot="var(--income)" value={analysis ? money(analysis.totals.income) : loadingStat} />
+          <Stat
+            label="Income"
+            dot="var(--income)"
+            value={analysis ? <AnimatedMoney cents={analysis.totals.income} /> : loadingStat}
+          />
           <Stat
             label="Expenses"
             dot="var(--expense)"
-            value={analysis ? money(analysis.totals.expenses) : loadingStat}
+            value={analysis ? <AnimatedMoney cents={analysis.totals.expenses} /> : loadingStat}
           />
           <Stat
             label="Net"
             tone={net > 0 ? 'text-income' : net < 0 ? 'text-destructive' : undefined}
-            value={analysis ? money(net, { signed: true }) : loadingStat}
+            value={analysis ? <AnimatedMoney cents={net} signed /> : loadingStat}
           />
         </div>
       </CardContent>
@@ -294,13 +371,17 @@ function SavingsCard({ analysis }: { analysis: BudgetAnalysis | null }) {
 function SavingsBody({ analysis }: { analysis: BudgetAnalysis }) {
   const money = useMoney();
   const rate = Math.max(0, analysis.totals.savingsRate);
+  const shownRate = useCountUp(Math.round(rate * 1000));
   const target = analysis.suggestedSavingsPct;
   const onTrack = rate >= target;
   const Trend = onTrack ? TrendingUp : TrendingDown;
   return (
     <>
       <div className="flex items-center justify-between gap-3">
-        <p className="tabular text-4xl font-bold tracking-tight">{formatPercent(rate)}</p>
+        <p className="tabular text-4xl font-bold tracking-tight">
+          <span className="sr-only">{formatPercent(rate)}</span>
+          <span aria-hidden="true">{formatPercent(shownRate / 1000)}</span>
+        </p>
         <span
           className={cn(
             'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium',
@@ -341,14 +422,14 @@ function TipsCard({ tips }: { tips: Insight[] }) {
   return (
     <Card className="lg:col-span-2">
       <CardHeader>
-        <CardTitle className="text-base">Budget tips</CardTitle>
+        <CardTitle className="text-base">Budget Tips</CardTitle>
         <CardDescription>Worked out from your own numbers, refreshed as you log.</CardDescription>
       </CardHeader>
       <CardContent>
         {tips.length === 0 ? (
           <p className="text-sm text-muted-foreground">Nothing to flag right now. Keep logging and tips will appear.</p>
         ) : (
-          <ul className="space-y-2.5">
+          <ul className="stagger space-y-2.5">
             {tips.map((t) => {
               const { icon: Icon, className } = TIP_STYLE[t.severity];
               return (
@@ -381,7 +462,7 @@ function RuleCard({ analysis }: { analysis: BudgetAnalysis }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">50/30/20 check</CardTitle>
+        <CardTitle className="text-base">50/30/20 Check</CardTitle>
         <CardDescription>Needs, wants and savings as a share of income.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -428,10 +509,10 @@ function RecentCard({ items, today }: { items: Transaction[] | null; today: stri
   return (
     <Card className="gap-0 pb-0 lg:col-span-2">
       <CardHeader className="pb-4">
-        <CardTitle className="text-base">Recent transactions</CardTitle>
+        <CardTitle className="text-base">Recent Transactions</CardTitle>
         <CardAction>
           <Button asChild variant="ghost" size="sm">
-            <Link to="/history">View all</Link>
+            <Link to="/history">View All</Link>
           </Button>
         </CardAction>
       </CardHeader>
@@ -439,7 +520,7 @@ function RecentCard({ items, today }: { items: Transaction[] | null; today: stri
         {items === null ? (
           <RowsSkeleton rows={4} />
         ) : items.length === 0 ? (
-          <EmptyState icon={Inbox} title="No transactions yet" />
+          <EmptyState icon={Inbox} title="No Transactions Yet" />
         ) : (
           items
             .slice(0, 6)
@@ -467,24 +548,34 @@ function UpcomingCard({ today }: { today: string }) {
       </CardHeader>
       <div className="border-t">
         {list.length === 0 ? (
-          <EmptyState icon={CalendarClock} title="Nothing due soon">
+          <EmptyState icon={CalendarClock} title="Nothing Due Soon">
             Add rent, bills and subscriptions under Recurring.
           </EmptyState>
         ) : (
           <ul className="divide-y">
             {list.map(({ rule, date }) => {
               const cat = categories.expense.find((c) => c.id === rule.categoryId);
+              const inDays = daysBetween(today, date);
+              const soon = inDays <= 3;
               return (
-                <li key={rule.id} className="flex min-h-16 items-center gap-3 px-4 py-3 sm:px-6">
+                <li key={rule.id} className="flex min-h-16 items-center gap-3 px-5 py-3">
                   <Repeat
                     className="size-4 shrink-0 text-(--dot)"
                     style={{ '--dot': cat?.color } as CSSProperties}
                     aria-hidden="true"
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{rule.name}</p>
+                    <p className="flex items-center gap-2 truncate font-medium">
+                      {rule.name}
+                      {soon && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-expense-soft px-1.5 py-0.5 text-[11px] font-medium text-expense">
+                          <span className="size-1.5 animate-pulse rounded-full bg-expense" aria-hidden="true" />
+                          Due soon
+                        </span>
+                      )}
+                    </p>
                     <p className="text-xs text-muted-foreground">
-                      {formatDate(date, today)} · {formatInDays(daysBetween(today, date))}
+                      {formatDate(date, today)} · {formatInDays(inDays)}
                     </p>
                   </div>
                   <span className="tabular font-semibold">{money(rule.amount)}</span>
@@ -504,13 +595,13 @@ function FirstRun() {
     <Card className="lg:col-span-3">
       <EmptyState
         icon={Wallet}
-        title="Nothing logged for this period"
+        title="Nothing Logged for This Period"
         action={
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => openNew('income')}>
-              Add income
+              Add Income
             </Button>
-            <Button onClick={() => openNew('expense')}>Add expense</Button>
+            <Button onClick={() => openNew('expense')}>Add Expense</Button>
           </div>
         }
       >

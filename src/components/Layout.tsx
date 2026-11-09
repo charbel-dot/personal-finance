@@ -1,4 +1,4 @@
-import { History, House, LogOut, Plus, Repeat, Settings, type LucideIcon } from 'lucide-react';
+import { CircleUserRound, History, House, LogOut, Plus, Repeat, Settings, Tags, type LucideIcon } from 'lucide-react';
 import { Suspense, useEffect, type ReactNode } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -13,8 +13,12 @@ const NAV: { to: string; label: string; icon: LucideIcon }[] = [
   { to: '/', label: 'Home', icon: House },
   { to: '/history', label: 'History', icon: History },
   { to: '/recurring', label: 'Recurring', icon: Repeat },
+  { to: '/categories', label: 'Categories', icon: Tags },
+  { to: '/account', label: 'Account', icon: CircleUserRound },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
+/** Phone bottom bar: four destinations around the add button. Account and Settings live in the top bar. */
+const BOTTOM_NAV = NAV.filter((n) => n.to !== '/settings' && n.to !== '/account');
 
 export function PageFallback() {
   return (
@@ -36,7 +40,7 @@ export function PageFallback() {
 /** Page title row. `actions` sit to the right on wide screens and wrap below on phones. */
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: ReactNode; actions?: ReactNode }) {
   return (
-    <header className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3 pt-6 pb-5 md:pt-10 md:pb-7">
+    <header className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3 pt-5 pb-4 md:pt-8 md:pb-6">
       <div className="min-w-0">
         <h1 className="text-2xl font-semibold tracking-tight text-balance md:text-3xl">{title}</h1>
         {subtitle && <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>}
@@ -47,7 +51,7 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
 }
 
 export function Page({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn('mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-10', className)}>{children}</div>;
+  return <div className={cn('mx-auto w-full max-w-6xl px-5 lg:px-10', className)}>{children}</div>;
 }
 
 export function Layout() {
@@ -75,7 +79,7 @@ export function Layout() {
         href="#main"
         className="fixed top-2 left-2 z-50 -translate-y-20 rounded-md bg-primary px-4 py-2 text-primary-foreground focus:translate-y-0"
       >
-        Skip to content
+        Skip to Content
       </a>
 
       {/* Desktop sidebar */}
@@ -85,12 +89,14 @@ export function Layout() {
       >
         <div className="flex h-20 items-center gap-3 border-b px-6">
           <Logo />
-          <span className="text-lg font-bold tracking-wide">MONEY</span>
+          <span className="text-lg font-bold tracking-wide" translate="no">
+            MONEY
+          </span>
         </div>
         <div className="flex flex-1 flex-col gap-1 p-3">
           <Button className="press mb-3 h-11 justify-start gap-2 text-sm" onClick={() => openNew('expense')}>
             <Plus className="size-5" aria-hidden="true" />
-            New transaction
+            New Transaction
             <kbd className="ml-auto rounded border border-primary-foreground/20 px-1.5 text-[11px] font-medium opacity-70">
               N
             </kbd>
@@ -121,16 +127,51 @@ export function Layout() {
               className="flex h-11 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
             >
               <LogOut className="size-5" aria-hidden="true" />
-              Sign out
+              Sign Out
             </button>
           </div>
         </div>
       </aside>
 
+      {/* Phone top bar: product mark + settings */}
+      <header className="flex min-h-14 items-center justify-between border-b px-4 pt-safe md:hidden">
+        <NavLink
+          to="/"
+          className="flex items-center gap-2.5 rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        >
+          <Logo className="size-8" />
+          <span className="font-bold tracking-wide" translate="no">
+            MONEY
+          </span>
+        </NavLink>
+        <div className="flex items-center gap-1">
+          {[
+            { to: '/account', label: 'Account', icon: CircleUserRound },
+            { to: '/settings', label: 'Settings', icon: Settings },
+          ].map(({ to, label, icon: Icon }) => (
+            <NavLink
+              key={to}
+              to={to}
+              aria-label={label}
+              className={({ isActive }) =>
+                cn(
+                  'grid size-10 place-items-center rounded-full text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50',
+                  isActive && 'bg-accent text-foreground',
+                )
+              }
+            >
+              <Icon className="size-5" aria-hidden="true" />
+            </NavLink>
+          ))}
+        </div>
+      </header>
+
       <main id="main" className="pb-28 md:pb-12">
         <ErrorBoundary resetKey={location.pathname}>
           <Suspense fallback={<PageFallback />}>
-            <Outlet />
+            <div key={location.pathname} className="animate-in duration-300 fade-in slide-in-from-bottom-1">
+              <Outlet />
+            </div>
           </Suspense>
         </ErrorBoundary>
       </main>
@@ -141,20 +182,20 @@ export function Layout() {
         className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 pb-safe md:hidden supports-[backdrop-filter]:bg-background/90"
       >
         <div className="mx-auto grid h-16 max-w-lg grid-cols-5">
-          {NAV.slice(0, 2).map((item) => (
+          {BOTTOM_NAV.slice(0, 2).map((item) => (
             <BottomLink key={item.to} {...item} />
           ))}
           <div className="grid place-items-center">
             <button
               type="button"
               onClick={() => openNew('expense')}
-              aria-label="Add transaction"
+              aria-label="Add Transaction"
               className="press -mt-7 grid size-14 place-items-center rounded-full border-4 border-background bg-primary text-primary-foreground shadow-lg outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
             >
               <Plus className="size-6" aria-hidden="true" />
             </button>
           </div>
-          {NAV.slice(2).map((item) => (
+          {BOTTOM_NAV.slice(2).map((item) => (
             <BottomLink key={item.to} {...item} />
           ))}
         </div>

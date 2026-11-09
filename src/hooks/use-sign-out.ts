@@ -10,9 +10,9 @@ export function useSignOut() {
   const navigate = useNavigate();
   return async () => {
     const ok = await confirm({
-      title: 'Sign out?',
+      title: 'Sign Out?',
       message: 'You’ll need your password to sign back in on this device.',
-      confirmLabel: 'Sign out',
+      confirmLabel: 'Sign Out',
     });
     if (!ok) return;
     try {

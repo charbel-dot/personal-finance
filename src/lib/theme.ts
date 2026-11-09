@@ -16,6 +16,10 @@ function readPref(): ThemePref {
 function apply(pref: ThemePref) {
   const dark = pref === 'dark' || (pref === 'system' && media().matches);
   document.documentElement.classList.toggle('dark', dark);
+  // Keep the browser chrome (address bar, PWA title bar) matching the page background.
+  for (const meta of document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) {
+    meta.content = dark ? '#0a0a0a' : '#fafafa';
+  }
 }
 
 /** Per-device theme preference, applied as the `.dark` class on <html> (shadcn convention). */

@@ -168,7 +168,7 @@ export function analyzeBudget(input: AnalysisInput): BudgetAnalysis {
       id: 'overspending',
       severity: 'high',
       title: `Spending exceeds income by ${format(totals.expenses - totals.income)}`,
-      detail: 'Pause a non-essential recurring cost or set a weekly cap on your largest "wants" category.',
+      detail: 'Pause a non-essential recurring cost or set a weekly cap on your largest “wants” category.',
       // Always the most important message when it applies.
       weight: 10 + (totals.expenses - totals.income) / totals.income,
     });

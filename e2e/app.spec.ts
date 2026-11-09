@@ -6,7 +6,7 @@ async function login(page: Page, password = E2E_PASSWORD) {
   await expect(page).toHaveURL(/\/login$/);
   await page.getByLabel('Username').fill(E2E_USER);
   await page.getByLabel('Password', { exact: true }).fill(password);
-  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.getByRole('button', { name: 'Sign In' }).click();
 }
 
 test.describe('auth', () => {
@@ -18,7 +18,7 @@ test.describe('auth', () => {
 
   test('signs in, protects routes and signs out', async ({ page, context }) => {
     await login(page);
-    await expect(page.getByRole('heading', { name: /^Good (morning|afternoon|evening|night)$/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /^Good (morning|afternoon|evening|night), E2e$/ })).toBeVisible();
 
     const cookie = (await context.cookies()).find((c) => c.name === '__Host-money_session');
     expect(cookie).toMatchObject({ httpOnly: true, secure: true, sameSite: 'Strict' });
@@ -26,8 +26,8 @@ test.describe('auth', () => {
     expect(cookie?.expires ?? 0).toBeGreaterThan(Date.now() / 1000 + 29 * 24 * 3600);
 
     await page.getByRole('link', { name: 'Settings' }).click();
-    await page.getByRole('button', { name: 'Sign out' }).click();
-    await page.getByRole('alertdialog').getByRole('button', { name: 'Sign out' }).click();
+    await page.getByRole('button', { name: 'Sign Out' }).click();
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Sign Out' }).click();
     await expect(page).toHaveURL(/\/login$/);
 
     await page.goto('/history');
@@ -39,32 +39,34 @@ test.describe('auth', () => {
 
 test('adds an expense and an income via quick add', async ({ page }) => {
   await login(page);
-  await expect(page.getByRole('heading', { name: /^Good (morning|afternoon|evening|night)$/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Good (morning|afternoon|evening|night), E2e$/ })).toBeVisible();
 
   // Expense: FAB → amount → (default category) → save.
-  await page.getByRole('button', { name: 'Add transaction' }).click();
-  const dialog = page.getByRole('dialog', { name: 'New transaction' });
+  await page.getByRole('button', { name: 'Add Transaction' }).click();
+  const dialog = page.getByRole('dialog', { name: 'New Transaction' });
   await expect(dialog).toBeVisible();
   const amount = dialog.getByLabel('Amount');
-  await expect(amount).toBeFocused();
+  // Phones: no auto-focus (the keyboard would jump up mid-animation); the user taps the field.
+  await expect(amount).not.toBeFocused();
+  await amount.click();
   await expect(amount).toHaveAttribute('inputmode', 'decimal');
 
   // Validation
-  await dialog.getByRole('button', { name: 'Add expense' }).click();
+  await dialog.getByRole('button', { name: 'Add Expense' }).click();
   await expect(dialog.getByText('Enter an amount greater than zero')).toBeVisible();
 
   await amount.fill('42.50');
   await dialog.getByText('Dining out').click();
   await dialog.getByLabel(/Note/).fill('Team lunch');
-  await dialog.getByRole('button', { name: 'Add expense' }).click();
+  await dialog.getByRole('button', { name: 'Add Expense' }).click();
   await expect(page.getByText('Expense added')).toBeVisible();
   await expect(dialog).toBeHidden();
 
   // Income
-  await page.getByRole('button', { name: 'Add transaction' }).click();
+  await page.getByRole('button', { name: 'Add Transaction' }).click();
   await dialog.getByRole('button', { name: 'Income' }).click();
   await dialog.getByLabel('Amount').fill('3000');
-  await dialog.getByRole('button', { name: 'Add income' }).click();
+  await dialog.getByRole('button', { name: 'Add Income' }).click();
   await expect(page.getByText('Income added')).toBeVisible();
 
   // Shows up in the dashboard and history.
@@ -75,20 +77,20 @@ test('adds an expense and an income via quick add', async ({ page }) => {
   await expect(page.getByRole('button', { name: /Dining out, expense \$42\.50, Team lunch/ })).toBeVisible();
 
   // The last-used category is remembered for the next expense.
-  await page.getByRole('button', { name: 'Add transaction' }).click();
+  await page.getByRole('button', { name: 'Add Transaction' }).click();
   await expect(dialog.getByRole('radio', { name: 'Dining out' })).toBeChecked();
 });
 
 test('recurring: create, pause, resume and delete', async ({ page }) => {
   await login(page);
   await page.getByRole('link', { name: 'Recurring' }).click();
-  await page.getByRole('button', { name: 'New recurring' }).click();
-  const sheet = page.getByRole('dialog', { name: 'New recurring expense' });
-  await sheet.getByRole('button', { name: 'Add recurring expense' }).click();
+  await page.getByRole('button', { name: 'New Recurring' }).click();
+  const sheet = page.getByRole('dialog', { name: 'New Recurring Expense' });
+  await sheet.getByRole('button', { name: 'Add Recurring Expense' }).click();
   await expect(sheet.getByText('Give it a name')).toBeVisible();
   await sheet.getByLabel('Name').fill('Gym');
   await sheet.getByLabel(/Amount/).fill('39.90');
-  await sheet.getByRole('button', { name: 'Add recurring expense' }).click();
+  await sheet.getByRole('button', { name: 'Add Recurring Expense' }).click();
   await expect(page.getByText('Recurring expense added')).toBeVisible();
 
   await page.getByRole('button', { name: 'Actions for Gym' }).click();
@@ -120,14 +122,19 @@ test('settings: theme, currency and a new category', async ({ page }) => {
   await page.getByRole('option', { name: /^EUR/ }).click();
   await expect(page.getByText('Currency set to EUR')).toBeVisible();
 
-  await page.getByRole('textbox', { name: 'New category name' }).fill('Pets');
-  await page.getByRole('button', { name: 'Add', exact: true }).click();
-  await page.getByRole('button', { name: 'Save categories' }).click();
-  await expect(page.getByText('Categories saved')).toBeVisible();
+  await page.getByRole('link', { name: 'Categories' }).click();
+  await page.getByRole('button', { name: 'New Category' }).click();
+  const sheet = page.getByRole('dialog', { name: 'New Category' });
+  await sheet.getByRole('button', { name: 'Add Category' }).click();
+  await expect(sheet.getByText('Give it a name')).toBeVisible();
+  await sheet.getByLabel('Name').fill('Pets');
+  await sheet.getByRole('button', { name: 'Add Category' }).click();
+  await expect(page.getByText('Pets added')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Edit Pets' })).toBeVisible();
 
   // The new category and currency show up in quick add.
-  await page.getByRole('button', { name: 'Add transaction' }).click();
-  const dialog = page.getByRole('dialog', { name: 'New transaction' });
+  await page.getByRole('button', { name: 'Add Transaction' }).click();
+  const dialog = page.getByRole('dialog', { name: 'New Transaction' });
   await expect(dialog.getByRole('radio', { name: 'Pets' })).toBeVisible();
   await expect(dialog.getByText('€')).toBeVisible();
 });
@@ -146,6 +153,16 @@ test('dashboard custom range and history filters', async ({ page }) => {
   await page.getByRole('option', { name: 'All time' }).click();
   await page.getByLabel('Search transactions').fill('zzz-no-match');
   await expect(page.getByText('No matches')).toBeVisible();
-  await page.getByRole('button', { name: 'Clear filters' }).click();
+  await page.getByRole('button', { name: 'Clear Filters' }).click();
   await expect(page.getByLabel('Search transactions')).toHaveValue('');
+});
+
+test('account shows the user and exports data', async ({ page }) => {
+  await login(page);
+  await page.getByRole('link', { name: 'Account' }).click();
+  await expect(page.getByRole('heading', { name: 'Account', level: 1 })).toBeVisible();
+  await expect(page.getByText(E2E_USER, { exact: true })).toBeVisible();
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export CSV' }).click();
+  expect((await download).suggestedFilename()).toMatch(/^money-\d{4}-\d{2}-\d{2}\.csv$/);
 });

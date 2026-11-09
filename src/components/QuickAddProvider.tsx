@@ -46,7 +46,7 @@ export function QuickAddProvider({ children }: { children: ReactNode }) {
   }, [hasAddParam, setParams]);
 
   const api = useMemo(() => ({ openNew, openEdit }), [openNew, openEdit]);
-  const title = state.editing ? 'Edit transaction' : 'New transaction';
+  const title = state.editing ? 'Edit Transaction' : 'New Transaction';
 
   return (
     <QuickAddContext value={api}>
