@@ -1,0 +1,20 @@
+# Cloudflare Pages project (static SPA + /api Pages Functions).
+# Top-level config is used by `wrangler pages dev` (local R2 simulation) and preview deployments.
+name = "money-app"
+pages_build_output_dir = "./dist"
+compatibility_date = "2026-11-01"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "money-app-data-dev"
+
+# Production deployments (branch "main") use the production bucket.
+[env.production]
+[[env.production.r2_buckets]]
+binding = "BUCKET"
+bucket_name = "money-app-data"
+
+[env.preview]
+[[env.preview.r2_buckets]]
+binding = "BUCKET"
+bucket_name = "money-app-data-dev"
