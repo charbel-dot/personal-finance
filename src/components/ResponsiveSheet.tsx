@@ -1,6 +1,6 @@
 import { X } from 'lucide-react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useIsDesktop } from '@/hooks/use-media-query';
 import { cn } from '@/lib/utils';
@@ -54,38 +54,77 @@ function DesktopDialog({ open, onClose, title, description, children }: Props) {
   );
 }
 
+interface VisibleArea {
+  /** Top of the visible area, in the coordinates `position: fixed` uses. */
+  top: number;
+  height: number;
+  /** The on-screen keyboard is covering part of the screen. */
+  keyboard: boolean;
+}
+
 /**
- * The visible area above the on-screen keyboard. `visualViewport` shrinks when the keyboard opens
- * (iOS and Android), so the sheet is anchored to it instead of the layout viewport: it rises with
- * the keyboard rather than being covered or pushed around.
+ * The part of the screen the user can actually see, above any on-screen keyboard.
+ *
+ * iOS never shrinks the layout viewport for the keyboard: it shrinks the *visual* viewport and
+ * scrolls it within the layout one. Anchoring the sheet to the visual viewport's top and height
+ * (rather than computing a `bottom` from `innerHeight`, which iOS reports inconsistently while the
+ * keyboard animates) keeps the sheet sitting exactly on the keyboard with no gap and no jump.
+ * Android (`interactive-widget=resizes-content`) resizes the layout viewport, so this stays a no-op.
  */
-function useKeyboardInset(active: boolean) {
-  const [inset, setInset] = useState({ bottom: 0, height: 0 });
+function useVisibleArea(active: boolean): VisibleArea | null {
+  const [area, setArea] = useState<VisibleArea | null>(null);
   useEffect(() => {
     const vv = window.visualViewport;
     if (!active || !vv) return;
+    let frame = 0;
     const update = () => {
-      setInset({
-        bottom: Math.max(0, window.innerHeight - vv.height - vv.offsetTop),
-        height: vv.height,
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const full = document.documentElement.clientHeight;
+        const next = {
+          top: Math.max(0, Math.round(vv.offsetTop)),
+          height: Math.round(vv.height),
+          keyboard: full - vv.height > 120,
+        };
+        setArea((prev) =>
+          prev?.top === next.top && prev.height === next.height && prev.keyboard === next.keyboard ? prev : next,
+        );
       });
     };
     update();
     vv.addEventListener('resize', update);
     vv.addEventListener('scroll', update);
+    window.addEventListener('scroll', update, { passive: true });
     return () => {
+      cancelAnimationFrame(frame);
       vv.removeEventListener('resize', update);
       vv.removeEventListener('scroll', update);
+      window.removeEventListener('scroll', update);
+      setArea(null);
     };
   }, [active]);
-  return inset;
+  return area;
+}
+
+/** Keep the focused field in view inside the sheet's own scroll area once the keyboard settles. */
+function useRevealFocusedField(body: RefObject<HTMLDivElement | null>, area: VisibleArea | null) {
+  const height = area?.height;
+  useEffect(() => {
+    const el = document.activeElement;
+    if (!body.current || !(el instanceof HTMLElement) || !body.current.contains(el)) return;
+    el.scrollIntoView({ block: 'nearest' });
+  }, [body, height]);
 }
 
 function PhoneSheet({ open, onClose, title, description, children }: Props) {
-  const inset = useKeyboardInset(open);
-  const style: CSSProperties = {
-    bottom: inset.bottom,
-    maxHeight: inset.height ? Math.round(inset.height * 0.94) : undefined,
+  const area = useVisibleArea(open);
+  const body = useRef<HTMLDivElement>(null);
+  useRevealFocusedField(body, area);
+  // The frame covers exactly the visible area; the sheet hugs its bottom edge.
+  // While the keyboard is up the home indicator is hidden, so the footer drops its safe-area padding.
+  const frame: CSSProperties & { '--sheet-safe-bottom'?: string } = {
+    ...(area ? { top: area.top, height: area.height } : { top: 0, bottom: 0 }),
+    '--sheet-safe-bottom': area?.keyboard ? '0px' : undefined,
   };
 
   return (
@@ -97,38 +136,41 @@ function PhoneSheet({ open, onClose, title, description, children }: Props) {
     >
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/45 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
-        <DialogPrimitive.Content
-          // No auto-focus into a field on phones: the keyboard would pop up mid-animation.
-          onOpenAutoFocus={(e) => {
-            e.preventDefault();
-          }}
-          style={style}
-          className={cn(
-            'fixed inset-x-0 z-50 flex max-h-[92dvh] flex-col glass-panel-strong rounded-t-[28px] border-t outline-none',
-            'transition-[bottom,max-height] duration-150 ease-out',
-            'data-[state=closed]:animate-out data-[state=closed]:duration-200 data-[state=closed]:slide-out-to-bottom',
-            'data-[state=open]:animate-in data-[state=open]:duration-300 data-[state=open]:slide-in-from-bottom',
-          )}
-        >
-          <div className="mx-auto mt-2.5 h-1.5 w-10 shrink-0 rounded-full bg-muted" aria-hidden="true" />
-          <div className="flex shrink-0 items-start justify-between gap-3 px-4 pt-2 pb-3">
-            <div className="min-w-0">
-              <DialogPrimitive.Title className="text-lg font-semibold">{title}</DialogPrimitive.Title>
-              <DialogPrimitive.Description className={description ? 'text-sm text-muted-foreground' : 'sr-only'}>
-                {description ?? title}
-              </DialogPrimitive.Description>
+        <div className="pointer-events-none fixed inset-x-0 z-50 flex flex-col justify-end" style={frame}>
+          <DialogPrimitive.Content
+            // No auto-focus into a field on phones: the keyboard would pop up mid-animation.
+            onOpenAutoFocus={(e) => {
+              e.preventDefault();
+            }}
+            className={cn(
+              'pointer-events-auto flex max-h-[min(94%,92dvh)] flex-col glass-panel-strong rounded-t-[28px] border-t outline-none',
+              'data-[state=closed]:animate-out data-[state=closed]:duration-200 data-[state=closed]:slide-out-to-bottom',
+              'data-[state=open]:animate-in data-[state=open]:duration-300 data-[state=open]:ease-out-expo data-[state=open]:slide-in-from-bottom',
+            )}
+          >
+            <div className="mx-auto mt-2.5 h-1.5 w-10 shrink-0 rounded-full bg-muted" aria-hidden="true" />
+            <div className="flex shrink-0 items-start justify-between gap-3 px-4 pt-2 pb-3">
+              <div className="min-w-0">
+                <DialogPrimitive.Title className="text-lg font-semibold">{title}</DialogPrimitive.Title>
+                <DialogPrimitive.Description className={description ? 'text-sm text-muted-foreground' : 'sr-only'}>
+                  {description ?? title}
+                </DialogPrimitive.Description>
+              </div>
+              <DialogPrimitive.Close
+                aria-label="Close"
+                className="-mt-1 -mr-1 grid size-10 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              >
+                <X className="size-5" />
+              </DialogPrimitive.Close>
             </div>
-            <DialogPrimitive.Close
-              aria-label="Close"
-              className="-mt-1 -mr-1 grid size-10 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            <div
+              ref={body}
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 [--sheet-px:--spacing(4)]"
             >
-              <X className="size-5" />
-            </DialogPrimitive.Close>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 [--sheet-px:--spacing(4)]">
-            {children}
-          </div>
-        </DialogPrimitive.Content>
+              {children}
+            </div>
+          </DialogPrimitive.Content>
+        </div>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
   );
@@ -139,7 +181,7 @@ export function SheetFooter({ children, className }: { children: ReactNode; clas
   return (
     <div
       className={cn(
-        'sticky bottom-0 z-10 -mx-(--sheet-px) mt-6 flex gap-2 border-t bg-[var(--glass-solid)] px-(--sheet-px) pt-4 pb-[max(--spacing(4),env(safe-area-inset-bottom))]',
+        'sticky bottom-0 z-10 -mx-(--sheet-px) mt-6 flex gap-2 border-t bg-[var(--glass-solid)] px-(--sheet-px) pt-4 pb-[max(--spacing(4),var(--sheet-safe-bottom,env(safe-area-inset-bottom)))]',
         className,
       )}
     >

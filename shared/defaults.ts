@@ -28,6 +28,7 @@ export const DEFAULT_SETTINGS: Settings = {
   openingBalance: 0,
   budgetRule: DEFAULT_BUDGET_RULE,
   autoSplit: true,
+  tourDone: false,
 };
 
 export const CATEGORY_COLORS = [

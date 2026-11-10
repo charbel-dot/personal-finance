@@ -16,6 +16,7 @@ import { Button as GlassButton } from 'glisse';
 import { ErrorBoundary } from './ErrorBoundary';
 import { GlassTabBar } from './Segmented';
 import { Logo } from './Logo';
+import { Walkthrough } from './Walkthrough';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useQuickAdd } from '@/context/quickAdd';
@@ -112,18 +113,23 @@ export function Layout() {
           </span>
         </div>
         <div className="flex flex-1 flex-col gap-1 p-3">
-          <Button className="press mb-3 h-11 justify-start gap-2 text-sm" onClick={() => openNew('expense')}>
+          <Button
+            data-tour="add"
+            className="press mb-3 h-11 justify-start gap-2 text-sm"
+            onClick={() => openNew('expense')}
+          >
             <Plus className="size-5" aria-hidden="true" />
             New Transaction
             <kbd className="ml-auto rounded border border-primary-foreground/20 px-1.5 text-[11px] font-medium opacity-70">
               N
             </kbd>
           </Button>
-          <nav aria-label="Main" className="flex flex-col gap-1">
+          <nav aria-label="Main" className="flex flex-col gap-1" data-tour="nav">
             {NAV.map(({ to, label, icon: Icon }) => (
               <NavLink
                 key={to}
                 to={to}
+                data-tour={to === '/settings' ? 'settings' : undefined}
                 end={to === '/'}
                 className={({ isActive }) =>
                   cn(
@@ -168,6 +174,7 @@ export function Layout() {
               key={to}
               to={to}
               aria-label={label}
+              data-tour={to === '/settings' ? 'settings' : undefined}
               className={({ isActive }) =>
                 cn(
                   'grid size-10 place-items-center rounded-full text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50',
@@ -191,10 +198,14 @@ export function Layout() {
         </ErrorBoundary>
       </main>
 
+      <Walkthrough />
+
       {/* Phone bottom bar: liquid glass tab bar + floating add button */}
-      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:hidden">
-        <div className="pointer-events-auto mx-auto flex max-w-lg items-center gap-2.5">
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 px-2 pb-[max(0.5rem,calc(env(safe-area-inset-bottom)-0.625rem))] md:hidden">
+        {/* Hugs the screen edges: the home indicator only needs ~24px, not the full 34px inset. */}
+        <div className="pointer-events-auto mx-auto flex max-w-lg items-center gap-2">
           <GlassTabBar
+            data-tour="nav"
             className="flex-1"
             aria-label="Main"
             value={BOTTOM_NAV.find((n) => isActive(n.to))?.to ?? null}
@@ -206,6 +217,7 @@ export function Layout() {
             }))}
           />
           <GlassButton
+            data-tour="add"
             variant="filled"
             onClick={() => openNew('expense')}
             aria-label="Add Transaction"

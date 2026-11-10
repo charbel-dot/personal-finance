@@ -1,4 +1,4 @@
-import { ChevronRight, LogOut, Monitor, Moon, Sun } from 'lucide-react';
+import { ChevronRight, LogOut, Monitor, Moon, PlayCircle, Sun } from 'lucide-react';
 import { Link } from 'react-router';
 import { useId, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
@@ -145,6 +145,20 @@ export default function Settings() {
               <Button asChild variant="outline" size="sm">
                 <Link to="/categories">
                   Manage <ChevronRight aria-hidden="true" />
+                </Link>
+              </Button>
+            </CardAction>
+          </CardHeader>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Walkthrough</CardTitle>
+            <CardDescription>A one-minute tour of the main screens and how to add a transaction.</CardDescription>
+            <CardAction>
+              <Button asChild variant="outline" size="sm">
+                <Link to="/?tour">
+                  <PlayCircle aria-hidden="true" /> Replay Tour
                 </Link>
               </Button>
             </CardAction>

@@ -181,12 +181,15 @@ const settingsBase = z.object({
   budgetRule,
   /** Split every income into the budget rule's buckets and track what is left in each. */
   autoSplit: z.boolean(),
+  /** The first-run walkthrough has been finished or skipped. */
+  tourDone: z.boolean(),
 });
 
 /** Stored settings. Fields added later get defaults so older settings.json files still load. */
 export const settings = settingsBase.extend({
   budgetRule: budgetRule.default(DEFAULT_BUDGET_RULE),
   autoSplit: z.boolean().default(true),
+  tourDone: z.boolean().default(false),
 });
 export type Settings = z.infer<typeof settings>;
 

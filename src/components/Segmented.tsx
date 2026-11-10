@@ -70,13 +70,15 @@ export interface GlassTabBarProps {
   value: string | null;
   'aria-label': string;
   className?: string;
+  /** Walkthrough anchor (see Walkthrough). */
+  'data-tour'?: string;
 }
 
 /** Liquid glass tab bar whose tabs are router links, sized to fill its container. */
-export function GlassTabBar({ items, value, className, ...aria }: GlassTabBarProps) {
+export function GlassTabBar({ items, value, className, 'data-tour': tour, ...aria }: GlassTabBarProps) {
   const ref = useFillWidth(items.length, true);
   return (
-    <div ref={ref} className={cn('min-w-0', className)}>
+    <div ref={ref} className={cn('min-w-0', className)} data-tour={tour}>
       <TabBar
         items={items}
         value={value}

@@ -320,7 +320,7 @@ function BalanceCard({ label, range, analysis }: { label: string; range: Range; 
   const negative = (balance.data?.balance ?? 0) < 0;
   const loadingStat = <Skeleton className="h-6 w-20" />;
   return (
-    <Card className="gap-5 lg:col-span-2">
+    <Card className="gap-5 lg:col-span-2" data-tour="balance">
       <CardHeader>
         <div className="flex items-center gap-3">
           <IconTile icon={Wallet} tone="var(--income)" />

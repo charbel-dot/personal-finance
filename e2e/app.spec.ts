@@ -1,13 +1,46 @@
 import { expect, test, type Page } from '@playwright/test';
 import { E2E_PASSWORD, E2E_USER } from '../playwright.config';
 
-async function login(page: Page, password = E2E_PASSWORD) {
+async function login(page: Page, password = E2E_PASSWORD, { tour = false } = {}) {
+  // The first-run walkthrough opens once per account; tests not about it skip it whenever it shows.
+  if (!tour) {
+    await page.addLocatorHandler(page.getByRole('dialog', { name: 'Welcome to Money' }), async (d) => {
+      await d.getByRole('button', { name: 'Skip' }).click();
+    });
+  }
   await page.goto('/');
   await expect(page).toHaveURL(/\/login$/);
   await page.getByLabel('Username').fill(E2E_USER);
   await page.getByLabel('Password', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Sign In' }).click();
 }
+
+test('first-run walkthrough: tours the app once, then replays from Settings', async ({ page }) => {
+  await login(page, E2E_PASSWORD, { tour: true });
+  const tour = page.getByRole('dialog');
+  await expect(tour).toHaveAccessibleName('Welcome to Money');
+  await tour.getByRole('button', { name: 'Show Me Around' }).click();
+  await expect(tour).toHaveAccessibleName('Your Money at a Glance');
+  for (const name of ['Add in Seconds', 'Look Back, Plan Ahead', 'Make It Yours', 'You’re All Set']) {
+    await tour.getByRole('button', { name: 'Next' }).click();
+    await expect(tour).toHaveAccessibleName(name);
+  }
+  await tour.getByRole('button', { name: 'Done' }).click();
+  await expect(tour).toBeHidden();
+
+  // Finished once: stays gone after a reload.
+  await page.reload();
+  await expect(page.getByRole('heading', { name: /^Good / })).toBeVisible();
+  await expect(page.getByRole('dialog')).toBeHidden();
+
+  // Replay from Settings; Escape closes it and clears the URL flag.
+  await page.getByRole('link', { name: 'Settings' }).click();
+  await page.getByRole('link', { name: 'Replay Tour' }).click();
+  await expect(page.getByRole('dialog')).toHaveAccessibleName('Welcome to Money');
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(page).toHaveURL(/\/$/);
+});
 
 test.describe('auth', () => {
   test('rejects a wrong password', async ({ page }) => {
