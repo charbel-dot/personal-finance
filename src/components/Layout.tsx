@@ -102,7 +102,7 @@ export function Layout() {
 
       {/* Desktop sidebar */}
       <aside
-        className="glass-panel fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r md:flex"
+        className="glass-chrome fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r md:flex"
         aria-label="Sidebar"
       >
         <div className="flex h-20 items-center gap-3 border-b px-6">
@@ -152,7 +152,7 @@ export function Layout() {
       </aside>
 
       {/* Phone top bar: product mark + categories, account, settings */}
-      <header className="glass-panel sticky top-0 z-30 flex min-h-14 items-center justify-between border-b px-4 pt-safe md:hidden">
+      <header className="glass-chrome sticky top-0 z-30 flex min-h-14 items-center justify-between border-b px-4 pt-safe md:hidden">
         <NavLink
           to="/"
           className="flex items-center gap-2.5 rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"

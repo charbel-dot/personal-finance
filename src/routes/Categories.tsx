@@ -86,7 +86,8 @@ export default function Categories() {
       />
 
       <Segmented
-        className="mb-4"
+        fill
+        className="mb-4 sm:max-w-sm"
         aria-label="Category type"
         value={tab}
         onValueChange={(v) => setParams(v === 'income' ? { tab: 'income' } : {}, { replace: true })}

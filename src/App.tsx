@@ -9,16 +9,49 @@ import { Logo } from './components/Logo';
 import { QuickAddProvider } from './components/QuickAddProvider';
 import { Toaster } from './components/ui/sonner';
 import { useBootstrap, useMe, usePatchSettings } from './lib/queries';
+import { loadRecharts } from './lib/recharts';
 import { localTimeZone } from './lib/today';
 
+const routes = {
+  dashboard: () => import('./routes/Dashboard'),
+  history: () => import('./routes/History'),
+  recurring: () => import('./routes/Recurring'),
+  savings: () => import('./routes/Savings'),
+  settings: () => import('./routes/Settings'),
+  categories: () => import('./routes/Categories'),
+  account: () => import('./routes/Account'),
+};
 const Login = lazy(() => import('./routes/Login'));
-const Dashboard = lazy(() => import('./routes/Dashboard'));
-const History = lazy(() => import('./routes/History'));
-const Recurring = lazy(() => import('./routes/Recurring'));
-const Savings = lazy(() => import('./routes/Savings'));
-const Settings = lazy(() => import('./routes/Settings'));
-const Categories = lazy(() => import('./routes/Categories'));
-const Account = lazy(() => import('./routes/Account'));
+const Dashboard = lazy(routes.dashboard);
+const History = lazy(routes.history);
+const Recurring = lazy(routes.recurring);
+const Savings = lazy(routes.savings);
+const Settings = lazy(routes.settings);
+const Categories = lazy(routes.categories);
+const Account = lazy(routes.account);
+
+/**
+ * A few seconds after the first screen is up, fetch the other pages' code (and the chart library)
+ * in idle time, so tab switches and charts are instant without competing with the first load.
+ */
+function usePrefetchRoutes(ready: boolean) {
+  useEffect(() => {
+    if (!ready) return;
+    let idle = 0;
+    const run = () => {
+      for (const load of Object.values(routes)) void load().catch(() => undefined);
+      void loadRecharts().catch(() => undefined);
+    };
+    const timer = globalThis.setTimeout(() => {
+      if (typeof window.requestIdleCallback === 'function') idle = window.requestIdleCallback(run, { timeout: 5000 });
+      else run();
+    }, 4000);
+    return () => {
+      globalThis.clearTimeout(timer);
+      if (idle && typeof window.cancelIdleCallback === 'function') window.cancelIdleCallback(idle);
+    };
+  }, [ready]);
+}
 const NotFound = lazy(() => import('./routes/NotFound'));
 
 function Splash() {
@@ -34,6 +67,7 @@ function RequireData() {
   const bootstrap = useBootstrap();
   const { mutate } = usePatchSettings();
   const generated = bootstrap.data?.generated ?? 0;
+  usePrefetchRoutes(bootstrap.isSuccess);
   const savedTz = bootstrap.data?.settings.timezone;
 
   useEffect(() => {

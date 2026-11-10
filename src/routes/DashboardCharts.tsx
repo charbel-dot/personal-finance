@@ -11,6 +11,7 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { ChartContainer, type ChartConfig } from '@/components/ui/chart';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMoney } from '@/lib/format';
+import { WhenVisible } from '@/components/WhenVisible';
 import { loadRecharts } from '@/lib/recharts';
 import { cn } from '@/lib/utils';
 
@@ -72,9 +73,11 @@ export function PaceCard({
         </div>
       </CardHeader>
       <CardContent className="px-2 sm:px-6">
-        <Suspense fallback={<Skeleton className="h-56 w-full sm:h-64" />}>
-          <PaceChart points={points} />
-        </Suspense>
+        <WhenVisible fallback={<Skeleton className="h-56 w-full sm:h-64" />}>
+          <Suspense fallback={<Skeleton className="h-56 w-full sm:h-64" />}>
+            <PaceChart points={points} />
+          </Suspense>
+        </WhenVisible>
       </CardContent>
     </Card>
   );
@@ -161,9 +164,11 @@ export function CategoryCard({
       {total > 0 && (
         <CardContent className="flex flex-col items-center gap-6 @lg:flex-row">
           <div className="relative size-40 shrink-0">
-            <Suspense fallback={<Skeleton className="size-40 rounded-full" />}>
-              <CategoryPie rows={rows} config={config} active={active} onActive={setActive} />
-            </Suspense>
+            <WhenVisible fallback={<Skeleton className="size-40 rounded-full" />}>
+              <Suspense fallback={<Skeleton className="size-40 rounded-full" />}>
+                <CategoryPie rows={rows} config={config} active={active} onActive={setActive} />
+              </Suspense>
+            </WhenVisible>
             {/* Centre label: the hovered/tapped slice, otherwise the total. */}
             <div
               className="pointer-events-none absolute inset-0 grid place-items-center text-center"
@@ -287,7 +292,7 @@ function PaceChart({ points }: { points: ReturnType<typeof spendingPace> }) {
           fill="url(#pace-fill)"
           connectNulls={false}
           activeDot={{ r: 5, fill: 'var(--color-current)', stroke: 'var(--card)', strokeWidth: 2 }}
-          animationDuration={1100}
+          isAnimationActive={false}
           animationEasing="ease-out"
         />
         {today && (
@@ -302,7 +307,7 @@ function PaceChart({ points }: { points: ReturnType<typeof spendingPace> }) {
                   r={9}
                   fill="var(--color-current)"
                   opacity={0.35}
-                  className="animate-ping [transform-box:fill-box] [transform-origin:center]"
+                  className="animate-ping [animation-iteration-count:3] [transform-box:fill-box] [transform-origin:center] motion-reduce:animate-none"
                 />
                 <circle r={4.5} fill="var(--color-current)" stroke="var(--card)" strokeWidth={2} />
               </g>
@@ -342,7 +347,7 @@ function CategoryPie({
           outerRadius="96%"
           paddingAngle={rows.length > 1 ? 2 : 0}
           strokeWidth={0}
-          animationDuration={900}
+          isAnimationActive={false}
           className="cursor-pointer"
           onMouseEnter={(_: unknown, index: number) => onActive(rows[index]?.id ?? null)}
           // Tap on touch screens toggles the slice.

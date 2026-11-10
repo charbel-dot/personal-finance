@@ -117,7 +117,7 @@ function DashboardHeader({
       }
       actions={
         <Segmented
-          className="w-full sm:w-auto"
+          className="w-full sm:w-80"
           fill
           aria-label="Period"
           value={period.kind}
@@ -265,7 +265,7 @@ function AnimatedMoney({ cents, className, signed }: { cents: number; className?
 function LiveDot({ className }: { className?: string }) {
   return (
     <span className={cn('relative inline-flex size-2', className)} aria-hidden="true">
-      <span className="absolute inset-0 animate-ping rounded-full bg-income opacity-60" />
+      <span className="absolute inset-0 animate-ping rounded-full bg-income opacity-60 [animation-iteration-count:3] motion-reduce:animate-none" />
       <span className="relative inline-flex size-2 rounded-full bg-income" />
     </span>
   );
