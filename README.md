@@ -39,10 +39,14 @@ Browser ──► Cloudflare Pages ── static SPA (dist/)
   costs as a share of income. The top 3 tips are shown and refresh as your data changes.
 - **History**: search (notes, category, amount), filters for type, category and date range, grouped by
   day, tap a row to edit or delete.
+- **Savings**: its own page for money you put aside, logged by the income source it came from. Each
+  source has a one-tap add button and a share of the total; you can also log withdrawals (never more
+  than you have saved). Shows the all-time total, this month's net savings and progress towards the
+  monthly target from your budget rule. Savings are a separate ledger and don't change the balance.
 - **Categories**: its own page with expense categories grouped by Needs / Wants / Savings and income
   sources, each with this month's total. Edit name, colour and budget group; archive and restore.
 - **Account**: your session (signed in, expiry, remember me), data stats, CSV export and a full JSON
-  backup, plus the steps to change the password.
+  backup (including savings), plus the steps to change the password.
 - **Settings**: currency (default USD), light, dark or system theme, opening balance, categories and
   income sources.
 
@@ -82,6 +86,7 @@ public/             _headers (CSP and security headers), icons, theme-init.js
 | `recurring.json`               | `{ items: Recurring[] }`                                                  |
 | `categories.json`              | `{ expense: Category[], income: Category[] }` (defaults until first edit) |
 | `settings.json`                | currency, timezone, opening balance, last-used categories                 |
+| `savings.json`                 | `{ items: SavingsEntry[] }` deposits and withdrawals by income source     |
 | `security/login-attempts.json` | rate-limit counters (hashed client keys)                                  |
 
 Amounts are stored as integer cents. Every write is a read-modify-write that uses a conditional put

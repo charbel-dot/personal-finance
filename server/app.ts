@@ -8,6 +8,7 @@ import {
   monthKey,
   rangeQuery,
   recurringInput,
+  savingsInput,
   settingsPatch,
   transactionInput,
   type Bootstrap,
@@ -15,19 +16,23 @@ import {
 import { sha256, timingSafeEqual, verifyPassword } from './crypto';
 import {
   createRecurring,
+  createSavings,
   createTransaction,
   deleteRecurring,
+  deleteSavings,
   deleteTransaction,
   getBalance,
   getCategories,
   getRecurring,
   getSettings,
+  listSavings,
   listTransactions,
   NotFoundError,
   patchSettings,
   putCategories,
   reconcileRecurring,
   updateRecurring,
+  updateSavings,
   updateTransaction,
   ValidationError,
 } from './data';
@@ -262,6 +267,22 @@ export function createApp() {
   });
 
   app.post('/recurring/reconcile', async (c) => c.json(await reconcileRecurring(c.env.BUCKET)));
+
+  /* ------------------------------------------------------------------------ savings */
+
+  app.get('/savings', async (c) => c.json({ items: await listSavings(c.env.BUCKET) }));
+
+  app.post('/savings', async (c) => c.json(await createSavings(c.env.BUCKET, await parseBody(c, savingsInput)), 201));
+
+  app.put('/savings/:id', async (c) => {
+    const id = parseParam(idSchema, c.req.param('id'), 'id');
+    return c.json(await updateSavings(c.env.BUCKET, id, await parseBody(c, savingsInput)));
+  });
+
+  app.delete('/savings/:id', async (c) => {
+    await deleteSavings(c.env.BUCKET, parseParam(idSchema, c.req.param('id'), 'id'));
+    return c.body(null, 204);
+  });
 
   /* --------------------------------------------------------------- settings/categories */
 

@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useCountUp } from '@/hooks/use-count-up';
 import { useSignOut } from '@/hooks/use-sign-out';
 import { useMoney } from '@/lib/format';
-import { useAppData, useBalance, useMe, useTransactions } from '@/lib/queries';
+import { useAppData, useBalance, useMe, useSavings, useTransactions } from '@/lib/queries';
 
 const longDate = new Intl.DateTimeFormat(undefined, {
   day: 'numeric',
@@ -185,6 +185,7 @@ function DataCard() {
   const { categories, recurring, settings } = useAppData();
   const money = useMoney();
   const all = useTransactions(null);
+  const savings = useSavings();
   const balance = useBalance();
   const items = useMemo(() => all.data ?? [], [all.data]);
   const months = new Set(items.map((t) => t.date.slice(0, 7))).size;
@@ -212,7 +213,14 @@ function DataCard() {
   }
 
   function exportJson(list: Transaction[]) {
-    const data = { exportedAt: new Date().toISOString(), settings, categories, recurring, transactions: list };
+    const data = {
+      exportedAt: new Date().toISOString(),
+      settings,
+      categories,
+      recurring,
+      transactions: list,
+      savings: savings.data ?? [],
+    };
     download(`money-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(data, null, 2), 'application/json');
     toast.success('Backup downloaded');
   }
@@ -254,7 +262,7 @@ function DataCard() {
           <Button variant="outline" disabled={!all.data} onClick={() => exportCsv(items)}>
             <Download aria-hidden="true" /> Export CSV
           </Button>
-          <Button variant="outline" disabled={!all.data} onClick={() => exportJson(items)}>
+          <Button variant="outline" disabled={!all.data || !savings.data} onClick={() => exportJson(items)}>
             <FileJson aria-hidden="true" /> Download Backup (JSON)
           </Button>
         </div>

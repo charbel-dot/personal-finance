@@ -5,6 +5,8 @@ import type {
   LoginInput,
   Recurring,
   RecurringInput,
+  SavingsEntry,
+  SavingsInput,
   Settings,
   SettingsPatch,
   Transaction,
@@ -79,6 +81,11 @@ export const api = {
   updateRecurring: (id: string, input: RecurringInput) =>
     request<Recurring>('PUT', `/recurring/${encodeURIComponent(id)}`, input),
   deleteRecurring: (id: string) => request<undefined>('DELETE', `/recurring/${encodeURIComponent(id)}`),
+  savings: () => request<{ items: SavingsEntry[] }>('GET', '/savings').then((r) => r.items),
+  createSavings: (input: SavingsInput) => request<SavingsEntry>('POST', '/savings', input),
+  updateSavings: (id: string, input: SavingsInput) =>
+    request<SavingsEntry>('PUT', `/savings/${encodeURIComponent(id)}`, input),
+  deleteSavings: (id: string) => request<undefined>('DELETE', `/savings/${encodeURIComponent(id)}`),
   putCategories: (doc: CategoriesDoc) => request<CategoriesDoc>('PUT', '/categories', doc),
   patchSettings: (patch: SettingsPatch) => request<Settings>('PATCH', '/settings', patch),
 };

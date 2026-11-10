@@ -1,4 +1,15 @@
-import { CircleUserRound, History, House, LogOut, Plus, Repeat, Settings, Tags, type LucideIcon } from 'lucide-react';
+import {
+  CircleUserRound,
+  History,
+  House,
+  LogOut,
+  PiggyBank,
+  Plus,
+  Repeat,
+  Settings,
+  Tags,
+  type LucideIcon,
+} from 'lucide-react';
 import { Suspense, useEffect, type ReactNode } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -13,12 +24,15 @@ const NAV: { to: string; label: string; icon: LucideIcon }[] = [
   { to: '/', label: 'Home', icon: House },
   { to: '/history', label: 'History', icon: History },
   { to: '/recurring', label: 'Recurring', icon: Repeat },
+  { to: '/savings', label: 'Savings', icon: PiggyBank },
   { to: '/categories', label: 'Categories', icon: Tags },
   { to: '/account', label: 'Account', icon: CircleUserRound },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
-/** Phone bottom bar: four destinations around the add button. Account and Settings live in the top bar. */
-const BOTTOM_NAV = NAV.filter((n) => n.to !== '/settings' && n.to !== '/account');
+/** Phone top bar: the destinations that don't fit in the bottom bar. */
+const TOP_NAV = ['/categories', '/account', '/settings'];
+/** Phone bottom bar: four destinations around the add button. */
+const BOTTOM_NAV = NAV.filter((n) => !TOP_NAV.includes(n.to));
 
 export function PageFallback() {
   return (
@@ -133,7 +147,7 @@ export function Layout() {
         </div>
       </aside>
 
-      {/* Phone top bar: product mark + settings */}
+      {/* Phone top bar: product mark + categories, account, settings */}
       <header className="flex min-h-14 items-center justify-between border-b px-4 pt-safe md:hidden">
         <NavLink
           to="/"
@@ -145,10 +159,7 @@ export function Layout() {
           </span>
         </NavLink>
         <div className="flex items-center gap-1">
-          {[
-            { to: '/account', label: 'Account', icon: CircleUserRound },
-            { to: '/settings', label: 'Settings', icon: Settings },
-          ].map(({ to, label, icon: Icon }) => (
+          {NAV.filter((n) => TOP_NAV.includes(n.to)).map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}

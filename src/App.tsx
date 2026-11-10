@@ -15,6 +15,7 @@ const Login = lazy(() => import('./routes/Login'));
 const Dashboard = lazy(() => import('./routes/Dashboard'));
 const History = lazy(() => import('./routes/History'));
 const Recurring = lazy(() => import('./routes/Recurring'));
+const Savings = lazy(() => import('./routes/Savings'));
 const Settings = lazy(() => import('./routes/Settings'));
 const Categories = lazy(() => import('./routes/Categories'));
 const Account = lazy(() => import('./routes/Account'));
@@ -82,6 +83,7 @@ export function App() {
                 <Route index element={<Dashboard />} />
                 <Route path="history" element={<History />} />
                 <Route path="recurring" element={<Recurring />} />
+                <Route path="savings" element={<Savings />} />
                 <Route path="categories" element={<Categories />} />
                 <Route path="account" element={<Account />} />
                 <Route path="settings" element={<Settings />} />

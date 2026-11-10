@@ -4,6 +4,7 @@ import type {
   Bootstrap,
   CategoriesDoc,
   RecurringInput,
+  SavingsInput,
   SettingsPatch,
   Transaction,
   TransactionInput,
@@ -16,6 +17,7 @@ export const keys = {
   balance: ['balance'] as const,
   transactions: (from?: string, to?: string) => ['transactions', from ?? 'all', to ?? 'all'] as const,
   allTransactions: ['transactions'] as const,
+  savings: ['savings'] as const,
 };
 
 export function useMe() {
@@ -85,6 +87,27 @@ export function useSaveRecurring() {
 export function useDeleteRecurring() {
   const invalidate = useInvalidateMoney();
   return useMutation({ mutationFn: api.deleteRecurring, onSettled: invalidate });
+}
+
+export function useSavings() {
+  return useQuery({ queryKey: keys.savings, queryFn: api.savings, staleTime: 30_000 });
+}
+
+export function useSaveSavings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id?: string; input: SavingsInput }) =>
+      id ? api.updateSavings(id, input) : api.createSavings(input),
+    onSettled: () => qc.invalidateQueries({ queryKey: keys.savings }),
+  });
+}
+
+export function useDeleteSavings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: api.deleteSavings,
+    onSettled: () => qc.invalidateQueries({ queryKey: keys.savings }),
+  });
 }
 
 export function useSaveCategories() {

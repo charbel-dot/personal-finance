@@ -191,3 +191,34 @@ test('recurring income and a custom budget rule', async ({ page }) => {
   await page.getByRole('link', { name: 'Home' }).click();
   await expect(page.getByRole('heading', { name: /Budget Split 60\/20\/20/ })).toBeVisible();
 });
+
+test('savings: add by source, guard withdrawals, edit and delete', async ({ page }) => {
+  await login(page);
+  await page.getByRole('link', { name: 'Savings' }).click();
+  await expect(page.getByRole('heading', { name: 'Savings', level: 1 })).toBeVisible();
+
+  // Add straight from a source row: the source is preselected.
+  await page.getByRole('button', { name: 'Add savings from Freelance' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Add Savings' });
+  await expect(sheet.getByRole('radio', { name: 'Freelance' })).toBeChecked();
+  await sheet.getByLabel(/Amount/).fill('250');
+  await sheet.getByRole('button', { name: 'Add to Savings' }).click();
+  await expect(page.getByText(/Saved .*250.* from Freelance/)).toBeVisible();
+
+  // Withdrawals can't exceed what's saved.
+  await page.getByRole('button', { name: 'Add Savings', exact: true }).click();
+  await sheet.getByRole('button', { name: 'Withdraw' }).first().click();
+  await sheet.getByLabel(/Amount/).fill('1000000');
+  await sheet.getByRole('button', { name: 'Withdraw' }).last().click();
+  await expect(sheet.getByText(/You only have/)).toBeVisible();
+  await sheet.getByLabel(/Amount/).fill('50');
+  await sheet.getByRole('button', { name: 'Withdraw' }).last().click();
+  await expect(page.getByText(/Withdrew/)).toBeVisible();
+
+  const withdrawal = page.getByRole('button', { name: /^Edit withdrawal of .*50/ }).first();
+  await withdrawal.click();
+  const edit = page.getByRole('dialog', { name: 'Edit Savings' });
+  await edit.getByRole('button', { name: 'Delete' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
+  await expect(page.getByText('Entry deleted')).toBeVisible();
+});

@@ -1,15 +1,20 @@
 import { DEFAULT_CATEGORIES, DEFAULT_SETTINGS } from '../shared/defaults';
 import { addDays, monthOf, monthsInRange, startOfMonth, todayIn } from '../shared/dates';
 import { generateDue } from '../shared/recurring';
+import { bySavingsDateDesc, savingsBalance } from '../shared/savings';
 import {
   categoriesDoc,
   monthFile,
+  MAX_SAVINGS_ENTRIES,
   recurringDoc,
+  savingsDoc,
   settings as settingsSchema,
   type Balance,
   type CategoriesDoc,
   type Recurring,
   type RecurringInput,
+  type SavingsEntry,
+  type SavingsInput,
   type Settings,
   type SettingsPatch,
   type Transaction,
@@ -23,6 +28,7 @@ export const KEYS = {
   recurring: 'recurring.json',
   categories: 'categories.json',
   settings: 'settings.json',
+  savings: 'savings.json',
 } as const;
 
 export class NotFoundError extends Error {
@@ -41,6 +47,7 @@ export class ValidationError extends Error {
 
 const emptyMonth = () => ({ items: [] as Transaction[] });
 const emptyRecurring = () => ({ items: [] as Recurring[] });
+const emptySavings = () => ({ items: [] as SavingsEntry[] });
 const nowIso = () => new Date().toISOString();
 const byDateDesc = (a: Transaction, b: Transaction) =>
   b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt);
@@ -315,4 +322,53 @@ export async function reconcileRecurring(
   });
 
   return { generated, today, rules: finalDoc.items };
+}
+
+/* ------------------------------------------------------------------------------ savings */
+
+export async function listSavings(bucket: R2Bucket): Promise<SavingsEntry[]> {
+  const { data } = await readJson(bucket, KEYS.savings, savingsDoc, emptySavings);
+  return [...data.items].sort(bySavingsDateDesc);
+}
+
+/** Withdrawals may never take the savings balance below zero. */
+function assertNonNegative(items: SavingsEntry[]) {
+  if (savingsBalance(items) < 0) throw new ValidationError('You can’t withdraw more than you have saved');
+}
+
+export async function createSavings(bucket: R2Bucket, input: SavingsInput): Promise<SavingsEntry> {
+  await assertCategory(bucket, 'income', input.sourceId);
+  const now = nowIso();
+  const entry: SavingsEntry = { ...input, id: randomId('s'), createdAt: now, updatedAt: now };
+  await updateJson(bucket, KEYS.savings, savingsDoc, emptySavings, (current) => {
+    if (current.items.length >= MAX_SAVINGS_ENTRIES) throw new ValidationError('Too many savings entries');
+    const items = [...current.items, entry];
+    assertNonNegative(items);
+    return { next: { items }, result: undefined };
+  });
+  return entry;
+}
+
+export async function updateSavings(bucket: R2Bucket, id: string, input: SavingsInput): Promise<SavingsEntry> {
+  await assertCategory(bucket, 'income', input.sourceId);
+  const { result } = await updateJson(bucket, KEYS.savings, savingsDoc, emptySavings, (current) => {
+    const existing = current.items.find((e) => e.id === id);
+    if (!existing) throw new NotFoundError('Savings entry');
+    const updated: SavingsEntry = { ...existing, ...input, note: input.note, updatedAt: nowIso() };
+    const items = current.items.map((e) => (e.id === id ? updated : e));
+    assertNonNegative(items);
+    return { next: { items }, result: updated };
+  });
+  if (!result) throw new NotFoundError('Savings entry');
+  return result;
+}
+
+export async function deleteSavings(bucket: R2Bucket, id: string): Promise<void> {
+  const { changed } = await updateJson(bucket, KEYS.savings, savingsDoc, emptySavings, (current) => {
+    if (!current.items.some((e) => e.id === id)) return undefined;
+    const items = current.items.filter((e) => e.id !== id);
+    assertNonNegative(items);
+    return { next: { items }, result: undefined };
+  });
+  if (!changed) throw new NotFoundError('Savings entry');
 }

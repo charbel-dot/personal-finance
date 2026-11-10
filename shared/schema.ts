@@ -111,6 +111,31 @@ export type Recurring = z.infer<typeof recurring>;
 export const recurringDoc = z.object({ items: z.array(recurring).max(500) });
 export type RecurringDoc = z.infer<typeof recurringDoc>;
 
+/** Money put into savings (deposit) or taken back out (withdrawal). */
+export const savingsKind = z.enum(['deposit', 'withdrawal']);
+export type SavingsKind = z.infer<typeof savingsKind>;
+
+export const savingsInput = z.object({
+  kind: savingsKind,
+  amount: amountCents,
+  /** Income source the money came from (deposits) or is attributed to (withdrawals). */
+  sourceId: id,
+  date: isoDate,
+  note,
+});
+export type SavingsInput = z.infer<typeof savingsInput>;
+
+export const savingsEntry = savingsInput.extend({
+  id,
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type SavingsEntry = z.infer<typeof savingsEntry>;
+
+export const MAX_SAVINGS_ENTRIES = 5000;
+export const savingsDoc = z.object({ items: z.array(savingsEntry).max(MAX_SAVINGS_ENTRIES) });
+export type SavingsDoc = z.infer<typeof savingsDoc>;
+
 export const currencyCode = z.string().regex(/^[A-Z]{3}$/, 'Invalid currency');
 
 const percent = z.number().int('Use whole percentages').min(0).max(100);
