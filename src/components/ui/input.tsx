@@ -1,18 +1,37 @@
+import { Input as GlassInput } from 'glisse';
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 
-function Input({ className, type, ...props }: React.ComponentProps<'input'>) {
+type Props = Omit<React.ComponentProps<'input'>, 'value' | 'defaultValue'> & {
+  value?: string | number;
+  defaultValue?: string | number;
+  /** Optional glyph shown before the text. */
+  icon?: React.ReactNode;
+};
+
+/**
+ * Liquid glass text field (glisse). Keeps the native `onChange` event API used across the app and
+ * works both controlled (`value`) and uncontrolled (`defaultValue`).
+ */
+function Input({ className, value, defaultValue, onChange, ref, ...props }: Props) {
+  const controlled = value !== undefined;
+  const [inner, setInner] = React.useState(() => (defaultValue === undefined ? '' : String(defaultValue)));
+  // glisse types only expose `onValueChange`, but spread props (including `onChange`) reach the
+  // native <input> after its own handler, so the native event API keeps working.
+  const native = {
+    ...props,
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (!controlled) setInner(e.target.value);
+      onChange?.(e);
+    },
+  } as unknown as React.ComponentProps<typeof GlassInput>;
   return (
-    <input
-      type={type}
+    <GlassInput
+      ref={ref}
       data-slot="input"
-      className={cn(
-        'h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none selection:bg-primary selection:text-primary-foreground file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm dark:bg-input/30',
-        'focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
-        'aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40',
-        className,
-      )}
-      {...props}
+      className={cn('w-full min-w-0', className)}
+      value={controlled ? String(value) : inner}
+      {...native}
     />
   );
 }

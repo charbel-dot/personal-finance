@@ -5,7 +5,11 @@ function Card({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-slot="card"
-      className={cn('flex flex-col gap-4 rounded-xl border bg-card py-5 text-card-foreground shadow-xs', className)}
+      className={cn(
+        // relative so an open glisse Menu inside can be raised (see .raise-open-menu in index.css).
+        'glass-panel relative flex flex-col gap-4 rounded-2xl border py-5 text-card-foreground',
+        className,
+      )}
       {...props}
     />
   );

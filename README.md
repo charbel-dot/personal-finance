@@ -43,6 +43,13 @@ Browser ──► Cloudflare Pages ── static SPA (dist/)
   source has a one-tap add button and a share of the total; you can also log withdrawals (never more
   than you have saved). Shows the all-time total, this month's net savings and progress towards the
   monthly target from your budget rule. Savings are a separate ledger and don't change the balance.
+- **Savings goals**: name a target (and optionally a date), add savings towards it, and see a progress
+  ring plus how much to put aside each month to get there. Goal cards and source rows filter the
+  savings history; deleting a goal keeps the money and just untags its entries.
+- **Everything is a link**: dashboard figures, tips, budget buckets, chart cards, upcoming bills and
+  account stats open the filtered History, Savings, Recurring or Categories page they describe.
+- **Liquid glass UI**: buttons, inputs, switches, segmented controls, menus and the phone tab bar use
+  [glisse](https://github.com/0kzh/glisse); cards, sheets and popovers are frosted glass panels.
 - **Categories**: its own page with expense categories grouped by Needs / Wants / Savings and income
   sources, each with this month's total. Edit name, colour and budget group; archive and restore.
 - **Account**: your session (signed in, expiry, remember me), data stats, CSV export and a full JSON
@@ -86,7 +93,7 @@ public/             _headers (CSP and security headers), icons, theme-init.js
 | `recurring.json`               | `{ items: Recurring[] }`                                                  |
 | `categories.json`              | `{ expense: Category[], income: Category[] }` (defaults until first edit) |
 | `settings.json`                | currency, timezone, opening balance, last-used categories                 |
-| `savings.json`                 | `{ items: SavingsEntry[] }` deposits and withdrawals by income source     |
+| `savings.json`                 | `{ items: SavingsEntry[], goals: SavingsGoal[] }` by source and goal      |
 | `security/login-attempts.json` | rate-limit counters (hashed client keys)                                  |
 
 Amounts are stored as integer cents. Every write is a read-modify-write that uses a conditional put

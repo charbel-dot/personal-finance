@@ -3,6 +3,7 @@ import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
 import {
   categoriesDoc,
+  goalInput,
   id as idSchema,
   loginInput,
   monthKey,
@@ -15,9 +16,11 @@ import {
 } from '../shared/schema';
 import { sha256, timingSafeEqual, verifyPassword } from './crypto';
 import {
+  createGoal,
   createRecurring,
   createSavings,
   createTransaction,
+  deleteGoal,
   deleteRecurring,
   deleteSavings,
   deleteTransaction,
@@ -31,6 +34,7 @@ import {
   patchSettings,
   putCategories,
   reconcileRecurring,
+  updateGoal,
   updateRecurring,
   updateSavings,
   updateTransaction,
@@ -270,7 +274,20 @@ export function createApp() {
 
   /* ------------------------------------------------------------------------ savings */
 
-  app.get('/savings', async (c) => c.json({ items: await listSavings(c.env.BUCKET) }));
+  app.get('/savings', async (c) => c.json(await listSavings(c.env.BUCKET)));
+
+  // Goals are registered before /savings/:id so "goals" is never read as an entry id.
+  app.post('/savings/goals', async (c) => c.json(await createGoal(c.env.BUCKET, await parseBody(c, goalInput)), 201));
+
+  app.put('/savings/goals/:id', async (c) => {
+    const id = parseParam(idSchema, c.req.param('id'), 'id');
+    return c.json(await updateGoal(c.env.BUCKET, id, await parseBody(c, goalInput)));
+  });
+
+  app.delete('/savings/goals/:id', async (c) => {
+    await deleteGoal(c.env.BUCKET, parseParam(idSchema, c.req.param('id'), 'id'));
+    return c.body(null, 204);
+  });
 
   app.post('/savings', async (c) => c.json(await createSavings(c.env.BUCKET, await parseBody(c, savingsInput)), 201));
 

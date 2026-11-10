@@ -5,7 +5,10 @@ import type {
   LoginInput,
   Recurring,
   RecurringInput,
+  GoalInput,
+  SavingsDoc,
   SavingsEntry,
+  SavingsGoal,
   SavingsInput,
   Settings,
   SettingsPatch,
@@ -81,7 +84,11 @@ export const api = {
   updateRecurring: (id: string, input: RecurringInput) =>
     request<Recurring>('PUT', `/recurring/${encodeURIComponent(id)}`, input),
   deleteRecurring: (id: string) => request<undefined>('DELETE', `/recurring/${encodeURIComponent(id)}`),
-  savings: () => request<{ items: SavingsEntry[] }>('GET', '/savings').then((r) => r.items),
+  savings: () => request<SavingsDoc>('GET', '/savings'),
+  createGoal: (input: GoalInput) => request<SavingsGoal>('POST', '/savings/goals', input),
+  updateGoal: (id: string, input: GoalInput) =>
+    request<SavingsGoal>('PUT', `/savings/goals/${encodeURIComponent(id)}`, input),
+  deleteGoal: (id: string) => request<undefined>('DELETE', `/savings/goals/${encodeURIComponent(id)}`),
   createSavings: (input: SavingsInput) => request<SavingsEntry>('POST', '/savings', input),
   updateSavings: (id: string, input: SavingsInput) =>
     request<SavingsEntry>('PUT', `/savings/${encodeURIComponent(id)}`, input),

@@ -64,7 +64,7 @@ test('adds an expense and an income via quick add', async ({ page }) => {
 
   // Income
   await page.getByRole('button', { name: 'Add Transaction' }).click();
-  await dialog.getByRole('button', { name: 'Income' }).click();
+  await dialog.getByRole('radio', { name: 'Income' }).click();
   await dialog.getByLabel('Amount').fill('3000');
   await dialog.getByRole('button', { name: 'Add Income' }).click();
   await expect(page.getByText('Income added')).toBeVisible();
@@ -141,7 +141,7 @@ test('settings: theme, currency and a new category', async ({ page }) => {
 
 test('dashboard custom range and history filters', async ({ page }) => {
   await login(page);
-  await page.getByRole('tab', { name: 'Custom' }).click();
+  await page.getByRole('radio', { name: 'Custom' }).click();
   await expect(page.getByLabel('From')).toBeVisible();
   await page.getByLabel('From').fill('2026-01-01');
   await expect(page.getByText('Custom range')).toBeVisible();
@@ -172,7 +172,7 @@ test('recurring income and a custom budget rule', async ({ page }) => {
   await page.getByRole('link', { name: 'Recurring' }).click();
   await page.getByRole('button', { name: 'New Recurring' }).click();
   const sheet = page.getByRole('dialog', { name: 'New Recurring' });
-  await sheet.getByRole('button', { name: 'Income' }).click();
+  await sheet.getByRole('radio', { name: 'Income' }).click();
   await sheet.getByLabel('Name').fill('Salary');
   await sheet.getByLabel(/Amount/).fill('3000');
   await sheet.getByRole('button', { name: 'Add Recurring Income' }).click();
@@ -194,7 +194,7 @@ test('recurring income and a custom budget rule', async ({ page }) => {
 
 test('savings: add by source, guard withdrawals, edit and delete', async ({ page }) => {
   await login(page);
-  await page.getByRole('link', { name: 'Savings' }).click();
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Savings' }).click();
   await expect(page.getByRole('heading', { name: 'Savings', level: 1 })).toBeVisible();
 
   // Add straight from a source row: the source is preselected.
@@ -207,12 +207,12 @@ test('savings: add by source, guard withdrawals, edit and delete', async ({ page
 
   // Withdrawals can't exceed what's saved.
   await page.getByRole('button', { name: 'Add Savings', exact: true }).click();
-  await sheet.getByRole('button', { name: 'Withdraw' }).first().click();
+  await sheet.getByRole('radio', { name: 'Withdraw' }).click();
   await sheet.getByLabel(/Amount/).fill('1000000');
-  await sheet.getByRole('button', { name: 'Withdraw' }).last().click();
+  await sheet.getByRole('button', { name: 'Withdraw', exact: true }).click();
   await expect(sheet.getByText(/You only have/)).toBeVisible();
   await sheet.getByLabel(/Amount/).fill('50');
-  await sheet.getByRole('button', { name: 'Withdraw' }).last().click();
+  await sheet.getByRole('button', { name: 'Withdraw', exact: true }).click();
   await expect(page.getByText(/Withdrew/)).toBeVisible();
 
   const withdrawal = page.getByRole('button', { name: /^Edit withdrawal of .*50/ }).first();
@@ -221,4 +221,48 @@ test('savings: add by source, guard withdrawals, edit and delete', async ({ page
   await edit.getByRole('button', { name: 'Delete' }).click();
   await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
   await expect(page.getByText('Entry deleted')).toBeVisible();
+});
+
+test('savings goals: create, add towards, track progress and delete', async ({ page }) => {
+  await login(page);
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Savings' }).click();
+  await page.getByRole('button', { name: 'New Goal' }).click();
+  const sheet = page.getByRole('dialog', { name: 'New Goal' });
+  await sheet.getByRole('button', { name: 'Create Goal' }).click();
+  await expect(sheet.getByText('Give it a name')).toBeVisible();
+  await sheet.getByLabel('Name').fill('Japan');
+  await sheet.getByLabel(/Target/).fill('1000');
+  await sheet.getByRole('button', { name: 'Create Goal' }).click();
+  await expect(page.getByText(/Japan created/)).toBeVisible();
+
+  await page.getByRole('button', { name: 'Add to Japan' }).click();
+  const add = page.getByRole('dialog', { name: 'Add Savings' });
+  await add.getByLabel(/Amount/).fill('250');
+  await add.getByRole('button', { name: 'Add to Savings' }).click();
+  await expect(page.getByText(/towards Japan/)).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Japan: .*250.* of .*1,000.*Show entries/ })).toBeVisible();
+
+  // The goal card filters the history to its entries.
+  await page.getByRole('button', { name: /^Japan: .*Show entries/ }).click();
+  await expect(page.getByRole('button', { name: 'Clear filter: Japan' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Actions for Japan' }).click();
+  await page.getByRole('menuitem', { name: 'Delete Goal' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Delete Goal' }).click();
+  await expect(page.getByText('Japan deleted')).toBeVisible();
+});
+
+test('dashboard cards link to where they belong', async ({ page }) => {
+  await login(page);
+  await page.getByRole('link', { name: 'Expenses: view transactions' }).click();
+  await expect(page).toHaveURL(/\/history\?.*type=expense/);
+  await page.getByRole('link', { name: 'Home' }).click();
+  await page.getByRole('link', { name: 'Savings', exact: true }).first().click();
+  await expect(page).toHaveURL(/\/savings/);
+  await page.getByRole('link', { name: 'Account' }).click();
+  await page
+    .getByRole('link', { name: /^Recurring/ })
+    .last()
+    .click();
+  await expect(page).toHaveURL(/\/recurring$/);
 });

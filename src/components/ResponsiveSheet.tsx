@@ -96,7 +96,7 @@ function PhoneSheet({ open, onClose, title, description, children }: Props) {
       }}
     >
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/60 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
         <DialogPrimitive.Content
           // No auto-focus into a field on phones: the keyboard would pop up mid-animation.
           onOpenAutoFocus={(e) => {
@@ -104,7 +104,7 @@ function PhoneSheet({ open, onClose, title, description, children }: Props) {
           }}
           style={style}
           className={cn(
-            'fixed inset-x-0 z-50 flex max-h-[92dvh] flex-col rounded-t-2xl border-t bg-background shadow-2xl outline-none',
+            'fixed inset-x-0 z-50 flex max-h-[92dvh] flex-col glass-panel-strong rounded-t-[28px] border-t outline-none',
             'transition-[bottom,max-height] duration-150 ease-out',
             'data-[state=closed]:animate-out data-[state=closed]:duration-200 data-[state=closed]:slide-out-to-bottom',
             'data-[state=open]:animate-in data-[state=open]:duration-300 data-[state=open]:slide-in-from-bottom',
@@ -139,7 +139,7 @@ export function SheetFooter({ children, className }: { children: ReactNode; clas
   return (
     <div
       className={cn(
-        'sticky bottom-0 z-10 -mx-(--sheet-px) mt-6 flex gap-2 border-t bg-background px-(--sheet-px) pt-4 pb-[max(--spacing(4),env(safe-area-inset-bottom))]',
+        'sticky bottom-0 z-10 -mx-(--sheet-px) mt-6 flex gap-2 border-t bg-[var(--glass-panel-strong)] backdrop-blur-xl px-(--sheet-px) pt-4 pb-[max(--spacing(4),env(safe-area-inset-bottom))]',
         className,
       )}
     >

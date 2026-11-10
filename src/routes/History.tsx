@@ -109,11 +109,7 @@ export default function History() {
       <PageHeader title="History" subtitle="Every transaction, searchable." />
 
       <div className="space-y-3">
-        <div className="relative">
-          <Search
-            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-          />
+        <div>
           <Label htmlFor="history-search" className="sr-only">
             Search transactions
           </Label>
@@ -128,14 +124,19 @@ export default function History() {
               setQuery(e.target.value);
               setLimit(PAGE);
             }}
-            className="h-11 pl-9"
+            icon={<Search aria-hidden="true" />}
           />
         </div>
 
-        <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]" role="group" aria-label="Filters">
-          <ListFilter className="mt-3 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        {/* Phones: a two-column grid so every filter is visible; wider screens: one row. */}
+        <div
+          className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2 sm:flex sm:flex-wrap sm:items-center"
+          role="group"
+          aria-label="Filters"
+        >
+          <ListFilter className="size-4 shrink-0 text-muted-foreground max-sm:hidden" aria-hidden="true" />
           <Select value={rangeKind} onValueChange={(v) => setRangeKind(v as RangeKind)}>
-            <SelectTrigger aria-label="Date range" className="h-10 shrink-0">
+            <SelectTrigger aria-label="Date range" className="w-full sm:w-fit">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -152,7 +153,7 @@ export default function History() {
               setType(v as TypeFilter);
             }}
           >
-            <SelectTrigger aria-label="Type" className="h-10 shrink-0">
+            <SelectTrigger aria-label="Type" className="w-full sm:w-fit">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -163,7 +164,7 @@ export default function History() {
           </Select>
           <CategorySelect type={type} value={categoryId} onChange={setCategoryId} />
           {hasFilters && (
-            <Button variant="ghost" className="h-10 shrink-0" onClick={clear}>
+            <Button variant="ghost" className="h-11 sm:h-10" onClick={clear}>
               <X aria-hidden="true" /> Clear
             </Button>
           )}
@@ -215,7 +216,7 @@ function CategorySelect({
     ));
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger aria-label="Category" className="h-10 shrink-0">
+      <SelectTrigger aria-label="Category" className="w-full sm:w-fit">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -241,8 +242,8 @@ function CategorySelect({
 
 function RangeFields({ value, onChange }: { value: Range; onChange: (update: (prev: Range) => Range) => void }) {
   return (
-    <div className="grid animate-in grid-cols-2 gap-3 fade-in slide-in-from-top-1 sm:max-w-md">
-      <div className="space-y-1.5">
+    <div className="grid animate-in grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3 fade-in slide-in-from-top-1 sm:max-w-md">
+      <div className="min-w-0 space-y-1.5">
         <Label htmlFor="h-from">From</Label>
         <Input
           id="h-from"
@@ -254,7 +255,7 @@ function RangeFields({ value, onChange }: { value: Range; onChange: (update: (pr
           }}
         />
       </div>
-      <div className="space-y-1.5">
+      <div className="min-w-0 space-y-1.5">
         <Label htmlFor="h-to">To</Label>
         <Input
           id="h-to"

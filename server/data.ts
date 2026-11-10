@@ -6,6 +6,7 @@ import {
   categoriesDoc,
   monthFile,
   MAX_SAVINGS_ENTRIES,
+  MAX_SAVINGS_GOALS,
   recurringDoc,
   savingsDoc,
   settings as settingsSchema,
@@ -13,7 +14,10 @@ import {
   type CategoriesDoc,
   type Recurring,
   type RecurringInput,
+  type GoalInput,
+  type SavingsDoc,
   type SavingsEntry,
+  type SavingsGoal,
   type SavingsInput,
   type Settings,
   type SettingsPatch,
@@ -47,7 +51,7 @@ export class ValidationError extends Error {
 
 const emptyMonth = () => ({ items: [] as Transaction[] });
 const emptyRecurring = () => ({ items: [] as Recurring[] });
-const emptySavings = () => ({ items: [] as SavingsEntry[] });
+const emptySavings = (): SavingsDoc => ({ items: [], goals: [] });
 const nowIso = () => new Date().toISOString();
 const byDateDesc = (a: Transaction, b: Transaction) =>
   b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt);
@@ -326,25 +330,36 @@ export async function reconcileRecurring(
 
 /* ------------------------------------------------------------------------------ savings */
 
-export async function listSavings(bucket: R2Bucket): Promise<SavingsEntry[]> {
+export async function listSavings(bucket: R2Bucket): Promise<SavingsDoc> {
   const { data } = await readJson(bucket, KEYS.savings, savingsDoc, emptySavings);
-  return [...data.items].sort(bySavingsDateDesc);
+  return { items: [...data.items].sort(bySavingsDateDesc), goals: data.goals };
 }
 
-/** Withdrawals may never take the savings balance below zero. */
-function assertNonNegative(items: SavingsEntry[]) {
-  if (savingsBalance(items) < 0) throw new ValidationError('You can’t withdraw more than you have saved');
+/** The savings balance, overall and per goal, may never go below zero. */
+function assertConsistent(doc: SavingsDoc) {
+  if (savingsBalance(doc.items) < 0) throw new ValidationError('You can’t withdraw more than you have saved');
+  for (const goal of doc.goals) {
+    if (savingsBalance(doc.items.filter((e) => e.goalId === goal.id)) < 0) {
+      throw new ValidationError(`You can’t withdraw more than is saved for ${goal.name}`);
+    }
+  }
+}
+
+function assertGoal(doc: SavingsDoc, goalId: string | undefined) {
+  if (goalId && !doc.goals.some((g) => g.id === goalId)) throw new ValidationError('Unknown savings goal');
 }
 
 export async function createSavings(bucket: R2Bucket, input: SavingsInput): Promise<SavingsEntry> {
   await assertCategory(bucket, 'income', input.sourceId);
   const now = nowIso();
   const entry: SavingsEntry = { ...input, id: randomId('s'), createdAt: now, updatedAt: now };
+  if (!entry.goalId) delete entry.goalId;
   await updateJson(bucket, KEYS.savings, savingsDoc, emptySavings, (current) => {
     if (current.items.length >= MAX_SAVINGS_ENTRIES) throw new ValidationError('Too many savings entries');
-    const items = [...current.items, entry];
-    assertNonNegative(items);
-    return { next: { items }, result: undefined };
+    assertGoal(current, entry.goalId);
+    const next = { ...current, items: [...current.items, entry] };
+    assertConsistent(next);
+    return { next, result: undefined };
   });
   return entry;
 }
@@ -354,10 +369,12 @@ export async function updateSavings(bucket: R2Bucket, id: string, input: Savings
   const { result } = await updateJson(bucket, KEYS.savings, savingsDoc, emptySavings, (current) => {
     const existing = current.items.find((e) => e.id === id);
     if (!existing) throw new NotFoundError('Savings entry');
+    assertGoal(current, input.goalId);
     const updated: SavingsEntry = { ...existing, ...input, note: input.note, updatedAt: nowIso() };
-    const items = current.items.map((e) => (e.id === id ? updated : e));
-    assertNonNegative(items);
-    return { next: { items }, result: updated };
+    if (!input.goalId) delete updated.goalId;
+    const next = { ...current, items: current.items.map((e) => (e.id === id ? updated : e)) };
+    assertConsistent(next);
+    return { next, result: updated };
   });
   if (!result) throw new NotFoundError('Savings entry');
   return result;
@@ -366,9 +383,47 @@ export async function updateSavings(bucket: R2Bucket, id: string, input: Savings
 export async function deleteSavings(bucket: R2Bucket, id: string): Promise<void> {
   const { changed } = await updateJson(bucket, KEYS.savings, savingsDoc, emptySavings, (current) => {
     if (!current.items.some((e) => e.id === id)) return undefined;
-    const items = current.items.filter((e) => e.id !== id);
-    assertNonNegative(items);
-    return { next: { items }, result: undefined };
+    const next = { ...current, items: current.items.filter((e) => e.id !== id) };
+    assertConsistent(next);
+    return { next, result: undefined };
   });
   if (!changed) throw new NotFoundError('Savings entry');
+}
+
+export async function createGoal(bucket: R2Bucket, input: GoalInput): Promise<SavingsGoal> {
+  const now = nowIso();
+  const goal: SavingsGoal = { ...input, id: randomId('g'), createdAt: now, updatedAt: now };
+  if (!goal.targetDate) delete goal.targetDate;
+  await updateJson(bucket, KEYS.savings, savingsDoc, emptySavings, (current) => {
+    if (current.goals.length >= MAX_SAVINGS_GOALS) throw new ValidationError('Too many savings goals');
+    return { next: { ...current, goals: [...current.goals, goal] }, result: undefined };
+  });
+  return goal;
+}
+
+export async function updateGoal(bucket: R2Bucket, id: string, input: GoalInput): Promise<SavingsGoal> {
+  const { result } = await updateJson(bucket, KEYS.savings, savingsDoc, emptySavings, (current) => {
+    const existing = current.goals.find((g) => g.id === id);
+    if (!existing) throw new NotFoundError('Savings goal');
+    const updated: SavingsGoal = { ...existing, ...input, updatedAt: nowIso() };
+    if (!input.targetDate) delete updated.targetDate;
+    return { next: { ...current, goals: current.goals.map((g) => (g.id === id ? updated : g)) }, result: updated };
+  });
+  if (!result) throw new NotFoundError('Savings goal');
+  return result;
+}
+
+/** Deletes a goal. Its entries stay in your savings, just no longer tagged with the goal. */
+export async function deleteGoal(bucket: R2Bucket, id: string): Promise<void> {
+  const { changed } = await updateJson(bucket, KEYS.savings, savingsDoc, emptySavings, (current) => {
+    if (!current.goals.some((g) => g.id === id)) return undefined;
+    const items = current.items.map((e) => {
+      if (e.goalId !== id) return e;
+      const untagged = { ...e };
+      delete untagged.goalId;
+      return untagged;
+    });
+    return { next: { items, goals: current.goals.filter((g) => g.id !== id) }, result: undefined };
+  });
+  if (!changed) throw new NotFoundError('Savings goal');
 }

@@ -120,6 +120,8 @@ export const savingsInput = z.object({
   amount: amountCents,
   /** Income source the money came from (deposits) or is attributed to (withdrawals). */
   sourceId: id,
+  /** Optional savings goal this money goes towards (or comes out of). */
+  goalId: id.optional(),
   date: isoDate,
   note,
 });
@@ -132,8 +134,29 @@ export const savingsEntry = savingsInput.extend({
 });
 export type SavingsEntry = z.infer<typeof savingsEntry>;
 
+export const goalInput = z.object({
+  name: z.string().trim().min(1, 'Name is required').max(40, 'Name is too long'),
+  target: amountCents,
+  /** Optional date to reach the target by. */
+  targetDate: isoDate.optional(),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Invalid color'),
+});
+export type GoalInput = z.infer<typeof goalInput>;
+
+export const savingsGoal = goalInput.extend({
+  id,
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type SavingsGoal = z.infer<typeof savingsGoal>;
+
 export const MAX_SAVINGS_ENTRIES = 5000;
-export const savingsDoc = z.object({ items: z.array(savingsEntry).max(MAX_SAVINGS_ENTRIES) });
+export const MAX_SAVINGS_GOALS = 50;
+export const savingsDoc = z.object({
+  items: z.array(savingsEntry).max(MAX_SAVINGS_ENTRIES),
+  /** Added in 1.2.0; older savings.json files have none. */
+  goals: z.array(savingsGoal).max(MAX_SAVINGS_GOALS).default([]),
+});
 export type SavingsDoc = z.infer<typeof savingsDoc>;
 
 export const currencyCode = z.string().regex(/^[A-Z]{3}$/, 'Invalid currency');

@@ -31,3 +31,23 @@ export const buttonVariants = cva(
     },
   },
 );
+
+/** Sizes for glass (glisse) buttons: pill shaped, same heights as the flat variants. */
+export const glassButtonSizes = cva(
+  "shrink-0 rounded-full font-medium whitespace-nowrap no-underline [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  {
+    variants: {
+      size: {
+        default: 'h-10 px-4 text-sm',
+        xs: 'h-7 gap-1 px-2.5 text-xs',
+        sm: 'h-9 gap-1.5 px-3.5 text-sm',
+        lg: 'h-11 px-6 text-base',
+        icon: 'size-10 p-0',
+        'icon-xs': 'size-7 p-0',
+        'icon-sm': 'size-9 p-0',
+        'icon-lg': 'size-11 p-0',
+      },
+    },
+    defaultVariants: { size: 'default' },
+  },
+);

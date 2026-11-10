@@ -4,7 +4,7 @@ import { useId, useState, type KeyboardEvent, type SyntheticEvent } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router';
 import { Logo } from '@/components/Logo';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api';
@@ -137,7 +137,7 @@ export default function Login() {
             </div>
             {/* One hit target: the whole row toggles the checkbox. */}
             <Label htmlFor={ids.remember} className="flex w-fit items-center gap-2.5 py-1 font-normal">
-              <Checkbox id={ids.remember} checked={remember} onCheckedChange={(v) => setRemember(v === true)} />
+              <Switch id={ids.remember} checked={remember} onCheckedChange={setRemember} />
               Keep me signed in for 30 days
             </Label>
             <Button type="submit" className="press h-11 w-full text-base" disabled={pending}>

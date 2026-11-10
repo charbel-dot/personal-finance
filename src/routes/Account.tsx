@@ -1,5 +1,16 @@
-import { CalendarDays, Clock, Copy, Download, FileJson, KeyRound, LogOut, ShieldCheck } from 'lucide-react';
+import {
+  CalendarDays,
+  ChevronRight,
+  Clock,
+  Copy,
+  Download,
+  FileJson,
+  KeyRound,
+  LogOut,
+  ShieldCheck,
+} from 'lucide-react';
 import { useMemo, type ReactNode } from 'react';
+import { Link } from 'react-router';
 import { toast } from 'sonner';
 import { parseIso } from '../../shared/dates';
 import type { Transaction } from '../../shared/schema';
@@ -172,13 +183,32 @@ function Code({ children }: { children: string }) {
   );
 }
 
-function Stat({ label, value, format }: { label: string; value: number; format?: (n: number) => string }) {
+function Stat({
+  label,
+  value,
+  format,
+  to,
+}: {
+  label: string;
+  value: number;
+  format?: (n: number) => string;
+  to: string;
+}) {
   const shown = useCountUp(value);
   return (
-    <div className="rounded-lg bg-muted/50 p-3">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="tabular mt-1 text-xl font-semibold">{format ? format(shown) : shown}</p>
-    </div>
+    <Link
+      to={to}
+      className="group block rounded-xl bg-muted/50 p-3 outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
+    >
+      <span className="flex items-center justify-between gap-1 text-xs text-muted-foreground">
+        {label}
+        <ChevronRight
+          className="size-3.5 opacity-50 transition-transform group-hover:translate-x-0.5"
+          aria-hidden="true"
+        />
+      </span>
+      <span className="tabular mt-1 block text-xl font-semibold">{format ? format(shown) : shown}</span>
+    </Link>
   );
 }
 
@@ -220,7 +250,7 @@ function DataCard() {
       categories,
       recurring,
       transactions: list,
-      savings: savings.data ?? [],
+      savings: savings.data ?? { items: [], goals: [] },
     };
     download(`money-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(data, null, 2), 'application/json');
     toast.success('Backup downloaded');
@@ -240,20 +270,23 @@ function DataCard() {
           <Skeleton className="h-24" />
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <Stat label="Transactions" value={items.length} />
-            <Stat label="Months tracked" value={months} />
-            <Stat label="Recurring" value={recurring.filter((r) => !r.paused).length} />
+            <Stat label="Transactions" to="/history?range=all" value={items.length} />
+            <Stat label="Months tracked" to="/history?range=all" value={months} />
+            <Stat label="Recurring" to="/recurring" value={recurring.filter((r) => !r.paused).length} />
             <Stat
               label="Categories"
+              to="/categories"
               value={[...categories.expense, ...categories.income].filter((c) => !c.archived).length}
             />
             <Stat
               label="All-time income"
+              to="/history?range=all&type=income"
               value={balance.data?.income ?? 0}
               format={(n) => money(n, { compact: true })}
             />
             <Stat
               label="All-time spent"
+              to="/history?range=all&type=expense"
               value={balance.data?.expenses ?? 0}
               format={(n) => money(n, { compact: true })}
             />

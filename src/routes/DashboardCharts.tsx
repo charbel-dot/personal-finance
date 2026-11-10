@@ -6,7 +6,8 @@ import { parseIso } from '../../shared/dates';
 import { formatPercent } from '../../shared/money';
 import type { Transaction } from '../../shared/schema';
 import { spendingPace } from '../../shared/series';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartContainer, type ChartConfig } from '@/components/ui/chart';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMoney } from '@/lib/format';
@@ -56,6 +57,11 @@ export function PaceCard({
       <CardHeader>
         <CardTitle className="text-base">Spending Pace</CardTitle>
         <CardDescription>{sentence}</CardDescription>
+        <CardAction>
+          <Button asChild variant="ghost" size="sm">
+            <Link to={`/history?range=custom&from=${cur.from}&to=${cur.to}&type=expense`}>Details</Link>
+          </Button>
+        </CardAction>
         <div className="flex items-center gap-4 pt-1 text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5">
             <span className="h-0.5 w-4 rounded bg-expense" /> This period
@@ -114,9 +120,12 @@ export function CategoryCard({
   slices,
   total,
   range,
+  type,
   className,
 }: {
   title: string;
+  /** Which transactions the card's "View All" opens in History. */
+  type: 'income' | 'expense';
   empty: string;
   slices: Slice[];
   total: number;
@@ -143,6 +152,11 @@ export function CategoryCard({
       <CardHeader>
         <CardTitle className="text-base">{title}</CardTitle>
         <CardDescription>{total > 0 ? `${money(total)} in total` : empty}</CardDescription>
+        <CardAction>
+          <Button asChild variant="ghost" size="sm">
+            <Link to={`/history?range=custom&from=${range.from}&to=${range.to}&type=${type}`}>View All</Link>
+          </Button>
+        </CardAction>
       </CardHeader>
       {total > 0 && (
         <CardContent className="flex flex-col items-center gap-6 @lg:flex-row">

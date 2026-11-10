@@ -86,7 +86,6 @@ export function BudgetRuleCard() {
           </div>
           <Switch
             className="mt-0.5"
-            size="lg"
             id={switchId}
             checked={settings.autoSplit}
             disabled={patch.isPending}

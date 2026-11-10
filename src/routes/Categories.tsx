@@ -1,19 +1,18 @@
-import { Archive, ArchiveRestore, Check, ChevronRight, Loader2, Plus } from 'lucide-react';
+import { Archive, ArchiveRestore, Check, ChevronRight, ListFilter, Loader2, Plus } from 'lucide-react';
 import { useId, useMemo, useState, type CSSProperties, type SyntheticEvent } from 'react';
-import { useSearchParams } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import { CATEGORY_COLORS } from '../../shared/defaults';
 import { endOfMonth, startOfMonth } from '../../shared/dates';
 import type { BudgetGroup, CategoriesDoc, Category, TransactionType } from '../../shared/schema';
 import { Page, PageHeader } from '@/components/Layout';
+import { Segmented } from '@/components/Segmented';
 import { ResponsiveSheet, SheetFooter } from '@/components/ResponsiveSheet';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useConfirm } from '@/context/confirm';
 import { useMoney } from '@/lib/format';
 import { useAppData, useSaveCategories, useTransactions } from '@/lib/queries';
@@ -86,22 +85,22 @@ export default function Categories() {
         }
       />
 
-      <Tabs
+      <Segmented
+        className="mb-4"
+        aria-label="Category type"
         value={tab}
         onValueChange={(v) => setParams(v === 'income' ? { tab: 'income' } : {}, { replace: true })}
-        className="mb-4"
-      >
-        <TabsList className="h-10">
-          <TabsTrigger value="expense" className="px-3">
-            Expense Categories{' '}
-            <span className="ml-1 text-muted-foreground">{categories.expense.filter((c) => !c.archived).length}</span>
-          </TabsTrigger>
-          <TabsTrigger value="income" className="px-3">
-            Income Sources{' '}
-            <span className="ml-1 text-muted-foreground">{categories.income.filter((c) => !c.archived).length}</span>
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
+        items={[
+          {
+            value: 'expense',
+            label: `Expenses · ${categories.expense.filter((c) => !c.archived).length}`,
+          },
+          {
+            value: 'income',
+            label: `Income · ${categories.income.filter((c) => !c.archived).length}`,
+          },
+        ]}
+      />
 
       <div className="stagger space-y-4">
         {tab === 'expense' ? (
@@ -402,26 +401,24 @@ function CategoryForm({
       {type === 'expense' && (
         <div className="space-y-2">
           <Label id={ids.group}>Budget group</Label>
-          <ToggleGroup
-            type="single"
-            variant="outline"
+          <Segmented
+            fill
+            aria-label="Budget group"
             value={group}
-            onValueChange={(v) => {
-              if (v) setGroup(v as BudgetGroup);
-            }}
-            aria-labelledby={ids.group}
-            className="w-full"
-          >
-            {GROUPS.map((g) => (
-              <ToggleGroupItem key={g.value} value={g.value} className="h-10 flex-1">
-                {g.label}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
+            onValueChange={setGroup}
+            items={GROUPS.map((g) => ({ value: g.value, label: g.label }))}
+          />
           <p className="text-xs text-muted-foreground">{GROUPS.find((g) => g.value === group)?.hint}</p>
         </div>
       )}
 
+      {category && (
+        <Button asChild variant="outline" className="w-full">
+          <Link to={`/history?range=all&category=${encodeURIComponent(category.id)}`}>
+            <ListFilter aria-hidden="true" /> View {type === 'income' ? 'Income' : 'Transactions'}
+          </Link>
+        </Button>
+      )}
       <SheetFooter>
         {category && (
           <Button

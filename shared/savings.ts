@@ -1,4 +1,5 @@
-import type { SavingsEntry } from './schema';
+import { daysBetween } from './dates';
+import type { SavingsEntry, SavingsGoal } from './schema';
 
 export interface SourceSavings {
   sourceId: string;
@@ -50,3 +51,43 @@ export function savingsBalance(entries: SavingsEntry[]): number {
 
 export const bySavingsDateDesc = (a: SavingsEntry, b: SavingsEntry) =>
   b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt);
+
+export interface GoalProgress {
+  goal: SavingsGoal;
+  /** Net saved towards the goal (deposits − withdrawals tagged with it), in cents. */
+  saved: number;
+  /** 0..1 */
+  ratio: number;
+  remaining: number;
+  reached: boolean;
+  /** Whole months left until targetDate (at least 1), when a date is set and not reached. */
+  monthsLeft?: number;
+  /** Amount to save each month to hit the date, when a date is set and not reached. */
+  perMonth?: number;
+  /** targetDate is in the past and the goal isn't reached. */
+  overdue: boolean;
+}
+
+export function goalProgress(goal: SavingsGoal, entries: SavingsEntry[], today: string): GoalProgress {
+  const saved = entries.filter((e) => e.goalId === goal.id).reduce((acc, e) => acc + signedAmount(e), 0);
+  const remaining = Math.max(0, goal.target - saved);
+  const reached = saved >= goal.target;
+  const progress: GoalProgress = {
+    goal,
+    saved,
+    ratio: goal.target > 0 ? Math.min(1, Math.max(0, saved / goal.target)) : 0,
+    remaining,
+    reached,
+    overdue: false,
+  };
+  if (goal.targetDate && !reached) {
+    const days = daysBetween(today, goal.targetDate);
+    if (days < 0) progress.overdue = true;
+    else {
+      const monthsLeft = Math.max(1, Math.ceil(days / 30.44));
+      progress.monthsLeft = monthsLeft;
+      progress.perMonth = Math.ceil(remaining / monthsLeft);
+    }
+  }
+  return progress;
+}

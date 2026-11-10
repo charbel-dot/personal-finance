@@ -4,6 +4,7 @@ import type {
   Bootstrap,
   CategoriesDoc,
   RecurringInput,
+  GoalInput,
   SavingsInput,
   SettingsPatch,
   Transaction,
@@ -106,6 +107,23 @@ export function useDeleteSavings() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: api.deleteSavings,
+    onSettled: () => qc.invalidateQueries({ queryKey: keys.savings }),
+  });
+}
+
+export function useSaveGoal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id?: string; input: GoalInput }) =>
+      id ? api.updateGoal(id, input) : api.createGoal(input),
+    onSettled: () => qc.invalidateQueries({ queryKey: keys.savings }),
+  });
+}
+
+export function useDeleteGoal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: api.deleteGoal,
     onSettled: () => qc.invalidateQueries({ queryKey: keys.savings }),
   });
 }

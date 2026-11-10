@@ -15,6 +15,7 @@ import { currencySymbol, useMoney } from '@/lib/format';
 import { useAppData, useDeleteTransaction, useSaveTransaction } from '@/lib/queries';
 import { localToday } from '@/lib/today';
 import { cn } from '@/lib/utils';
+import { Segmented } from './Segmented';
 
 interface Props {
   initialType: TransactionType;
@@ -219,25 +220,21 @@ function focusFirstError(errors: Errors, ids: { amount: string; date: string }, 
 
 export function TypeSwitch({ value, onChange }: { value: TransactionType; onChange: (t: TransactionType) => void }) {
   return (
-    <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1" role="group" aria-label="Transaction type">
-      {TYPES.map(({ value: v, label, icon: Icon }) => (
-        <button
-          key={v}
-          type="button"
-          aria-pressed={value === v}
-          onClick={() => onChange(v)}
-          className={cn(
-            'press flex h-9 items-center justify-center gap-1.5 rounded-md text-sm font-medium text-muted-foreground transition-colors outline-none',
-            'focus-visible:ring-[3px] focus-visible:ring-ring/50',
-            value === v && 'bg-background text-foreground shadow-sm dark:bg-accent',
-            value === v && (v === 'income' ? 'text-income' : 'text-expense'),
-          )}
-        >
-          <Icon className="size-4" aria-hidden="true" />
-          {label}
-        </button>
-      ))}
-    </div>
+    <Segmented
+      fill
+      aria-label="Transaction type"
+      value={value}
+      onValueChange={onChange}
+      items={TYPES.map(({ value: v, label, icon: Icon }) => ({
+        value: v,
+        label: (
+          <span className={cn('flex items-center gap-1.5', v === 'income' ? 'text-income' : 'text-expense')}>
+            <Icon className="size-4" aria-hidden="true" />
+            <span className="text-foreground">{label}</span>
+          </span>
+        ),
+      }))}
+    />
   );
 }
 

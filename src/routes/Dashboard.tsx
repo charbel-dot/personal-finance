@@ -22,13 +22,13 @@ import { upcoming } from '../../shared/recurring';
 import type { Transaction } from '../../shared/schema';
 import { EmptyState, ErrorMessage, RowsSkeleton } from '@/components/Feedback';
 import { Page, PageHeader } from '@/components/Layout';
+import { Segmented } from '@/components/Segmented';
 import { TransactionRow } from '@/components/TransactionRow';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useQuickAdd } from '@/context/quickAdd';
 import { useCountUp } from '@/hooks/use-count-up';
 import { pick, useUrlState } from '@/hooks/use-url-state';
@@ -116,15 +116,14 @@ function DashboardHeader({
         </>
       }
       actions={
-        <Tabs value={period.kind} onValueChange={(v) => onPeriod({ ...period, kind: v as PeriodKind })}>
-          <TabsList className="h-10">
-            {PERIODS.map((p) => (
-              <TabsTrigger key={p.kind} value={p.kind} className="px-3">
-                {p.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
+        <Segmented
+          className="w-full sm:w-auto"
+          fill
+          aria-label="Period"
+          value={period.kind}
+          onValueChange={(kind) => onPeriod({ ...period, kind })}
+          items={PERIODS.map((p) => ({ value: p.kind, label: p.label }))}
+        />
       }
     />
   );
@@ -173,7 +172,7 @@ export default function Dashboard() {
       {period.kind === 'custom' && <CustomRange period={period} onChange={setPeriod} />}
 
       <div className="stagger grid gap-3 sm:gap-4 lg:grid-cols-3">
-        <BalanceCard label={resolved.label} analysis={status === 'loading' ? null : analysis} />
+        <BalanceCard label={resolved.label} range={curRange} analysis={status === 'loading' ? null : analysis} />
         <SavingsCard analysis={status === 'loading' ? null : analysis} />
         <Insights
           status={status}
@@ -226,7 +225,7 @@ function Insights({
   return (
     <>
       <PaceCard current={current} previous={previous} cur={cur} prev={prev} today={today} />
-      <TipsCard tips={analysis.tips} />
+      <TipsCard tips={analysis.tips} range={cur} />
       <RuleCard analysis={analysis} />
       <CategoryCard
         className="lg:col-span-2"
@@ -235,6 +234,7 @@ function Insights({
         slices={analysis.expensesByCategory}
         total={analysis.totals.expenses}
         range={cur}
+        type="expense"
       />
       <CategoryCard
         title="Income by Source"
@@ -242,6 +242,7 @@ function Insights({
         slices={analysis.incomeBySource}
         total={analysis.totals.income}
         range={cur}
+        type="income"
       />
     </>
   );
@@ -282,19 +283,37 @@ function IconTile({ icon: Icon, tone }: { icon: LucideIcon; tone: string }) {
   );
 }
 
-function Stat({ label, value, dot, tone }: { label: string; value: ReactNode; dot?: string; tone?: string }) {
+function Stat({
+  label,
+  value,
+  dot,
+  tone,
+  to,
+}: {
+  label: string;
+  value: ReactNode;
+  dot?: string;
+  tone?: string;
+  /** Where tapping the figure goes (History, filtered). */
+  to: string;
+}) {
   return (
-    <div className="min-w-0">
-      <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+    <Link
+      to={to}
+      className="-m-2 block min-w-0 rounded-xl p-2 outline-none hover:bg-accent/50 focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      aria-label={`${label}: view transactions`}
+    >
+      <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
         {dot && <span className="size-2 rounded-full bg-(--dot)" style={{ '--dot': dot } as CSSProperties} />}
         {label}
-      </p>
-      <div className={cn('tabular mt-1 truncate text-base font-semibold sm:text-lg', tone)}>{value}</div>
-    </div>
+      </span>
+      <span className={cn('tabular mt-1 block truncate text-base font-semibold sm:text-lg', tone)}>{value}</span>
+    </Link>
   );
 }
 
-function BalanceCard({ label, analysis }: { label: string; analysis: BudgetAnalysis | null }) {
+function BalanceCard({ label, range, analysis }: { label: string; range: Range; analysis: BudgetAnalysis | null }) {
+  const inRange = `/history?range=custom&from=${range.from}&to=${range.to}`;
   const balance = useBalance();
   const { openNew } = useQuickAdd();
   const net = analysis?.totals.net ?? 0;
@@ -324,7 +343,13 @@ function BalanceCard({ label, analysis }: { label: string; analysis: BudgetAnaly
       <CardContent className="space-y-6">
         <div className="text-4xl font-bold tracking-tight sm:text-5xl" aria-live="polite">
           {balance.data ? (
-            <AnimatedMoney cents={balance.data.balance} className={negative ? 'text-destructive' : 'text-income'} />
+            <Link
+              to="/history?range=all"
+              className="-m-1 inline-block rounded-xl p-1 outline-none hover:bg-accent/40 focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              aria-label="Balance: view all transactions"
+            >
+              <AnimatedMoney cents={balance.data.balance} className={negative ? 'text-destructive' : 'text-income'} />
+            </Link>
           ) : (
             <Skeleton className="h-12 w-56" />
           )}
@@ -332,16 +357,19 @@ function BalanceCard({ label, analysis }: { label: string; analysis: BudgetAnaly
         <div className="grid grid-cols-3 gap-3 border-t pt-5">
           <Stat
             label="Income"
+            to={`${inRange}&type=income`}
             dot="var(--income)"
             value={analysis ? <AnimatedMoney cents={analysis.totals.income} /> : loadingStat}
           />
           <Stat
             label="Expenses"
+            to={`${inRange}&type=expense`}
             dot="var(--expense)"
             value={analysis ? <AnimatedMoney cents={analysis.totals.expenses} /> : loadingStat}
           />
           <Stat
             label="Net"
+            to={inRange}
             tone={net > 0 ? 'text-income' : net < 0 ? 'text-destructive' : undefined}
             value={analysis ? <AnimatedMoney cents={net} signed /> : loadingStat}
           />
@@ -362,6 +390,11 @@ function SavingsCard({ analysis }: { analysis: BudgetAnalysis | null }) {
             <CardDescription>Share of income you kept</CardDescription>
           </div>
         </div>
+        <CardAction>
+          <Button asChild variant="ghost" size="sm">
+            <Link to="/savings">Savings</Link>
+          </Button>
+        </CardAction>
       </CardHeader>
       <CardContent className="space-y-5">
         {!analysis ? (
@@ -426,7 +459,28 @@ const TIP_STYLE: Record<Insight['severity'], { icon: LucideIcon; className: stri
   positive: { icon: CircleCheck, className: 'text-income' },
 };
 
-function TipsCard({ tips }: { tips: Insight[] }) {
+/** Where a tip leads: the transactions, categories or page it is about. */
+function tipLink(id: string, range: Range): string {
+  const inRange = `/history?range=custom&from=${range.from}&to=${range.to}`;
+  const category = /^(?:share|mom)-(.+)$/.exec(id)?.[1];
+  if (category) return `${inRange}&category=${encodeURIComponent(category)}`;
+  switch (id) {
+    case 'needs-high':
+    case 'wants-high':
+      return '/categories';
+    case 'savings-gap':
+    case 'savings-good':
+      return '/savings';
+    case 'recurring-share':
+      return '/recurring';
+    case 'no-income':
+      return `${inRange}&type=income`;
+    default:
+      return `${inRange}&type=expense`;
+  }
+}
+
+function TipsCard({ tips, range }: { tips: Insight[]; range: Range }) {
   return (
     <Card className="lg:col-span-2">
       <CardHeader>
@@ -441,18 +495,20 @@ function TipsCard({ tips }: { tips: Insight[] }) {
             {tips.map((t) => {
               const { icon: Icon, className } = TIP_STYLE[t.severity];
               return (
-                <li
-                  key={t.id}
-                  className={cn(
-                    'flex gap-3 rounded-lg border p-3.5',
-                    t.severity === 'high' ? 'border-destructive/30 bg-destructive/5' : 'bg-muted/40',
-                  )}
-                >
-                  <Icon className={cn('mt-0.5 size-[18px] shrink-0', className)} aria-hidden="true" />
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">{t.title}</p>
-                    <p className="mt-0.5 text-sm text-muted-foreground">{t.detail}</p>
-                  </div>
+                <li key={t.id}>
+                  <Link
+                    to={tipLink(t.id, range)}
+                    className={cn(
+                      'flex gap-3 rounded-xl border p-3.5 outline-none transition-colors hover:bg-accent/60 focus-visible:ring-[3px] focus-visible:ring-ring/50',
+                      t.severity === 'high' ? 'border-destructive/30 bg-destructive/5' : 'bg-muted/40',
+                    )}
+                  >
+                    <Icon className={cn('mt-0.5 size-[18px] shrink-0', className)} aria-hidden="true" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">{t.title}</p>
+                      <p className="mt-0.5 text-sm text-muted-foreground">{t.detail}</p>
+                    </div>
+                  </Link>
                 </li>
               );
             })}
@@ -493,9 +549,17 @@ function RuleCard({ analysis }: { analysis: BudgetAnalysis }) {
         {analysis.totals.income === 0 ? (
           <p className="text-sm text-muted-foreground">Add income for this period to see your buckets.</p>
         ) : split ? (
-          analysis.rule.map((b) => <SplitBucket key={b.group} bucket={b} income={analysis.totals.income} />)
+          analysis.rule.map((b) => (
+            <BucketLink key={b.group} group={b.group}>
+              <SplitBucket bucket={b} income={analysis.totals.income} />
+            </BucketLink>
+          ))
         ) : (
-          analysis.rule.map((b) => <ShareBucket key={b.group} bucket={b} />)
+          analysis.rule.map((b) => (
+            <BucketLink key={b.group} group={b.group}>
+              <ShareBucket bucket={b} />
+            </BucketLink>
+          ))
         )}
       </CardContent>
     </Card>
@@ -503,6 +567,18 @@ function RuleCard({ analysis }: { analysis: BudgetAnalysis }) {
 }
 
 type Bucket = BudgetAnalysis['rule'][number];
+
+/** Savings goes to the Savings page; needs and wants to the categories behind them. */
+function BucketLink({ group, children }: { group: Bucket['group']; children: ReactNode }) {
+  return (
+    <Link
+      to={group === 'savings' ? '/savings' : '/categories'}
+      className="-mx-2 block rounded-xl px-2 py-1.5 outline-none hover:bg-accent/50 focus-visible:ring-[3px] focus-visible:ring-ring/50"
+    >
+      {children}
+    </Link>
+  );
+}
 
 /** Auto-split view: the bucket's share of income, what went out of it, and what is left. */
 function SplitBucket({ bucket, income }: { bucket: Bucket; income: number }) {
@@ -629,30 +705,35 @@ function UpcomingCard({ today }: { today: string }) {
               const inDays = daysBetween(today, date);
               const soon = inDays <= 3;
               return (
-                <li key={rule.id} className="flex min-h-16 items-center gap-3 px-5 py-3">
-                  <Repeat
-                    className="size-4 shrink-0 text-(--dot)"
-                    style={{ '--dot': cat?.color } as CSSProperties}
-                    aria-hidden="true"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="flex items-center gap-2 truncate font-medium">
-                      {rule.name}
-                      {soon && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-expense-soft px-1.5 py-0.5 text-[11px] font-medium text-expense">
-                          <span className="size-1.5 animate-pulse rounded-full bg-expense" aria-hidden="true" />
-                          {rule.type === 'income' ? 'Arriving soon' : 'Due soon'}
-                        </span>
-                      )}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatDate(date, today)} · {formatInDays(inDays)}
-                    </p>
-                  </div>
-                  <span className={cn('tabular font-semibold', rule.type === 'income' && 'text-income')}>
-                    {rule.type === 'income' ? '+' : ''}
-                    {money(rule.amount)}
-                  </span>
+                <li key={rule.id}>
+                  <Link
+                    to={`/recurring?edit=${encodeURIComponent(rule.id)}`}
+                    className="flex min-h-16 items-center gap-3 px-5 py-3 outline-none hover:bg-accent/50 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset"
+                  >
+                    <Repeat
+                      className="size-4 shrink-0 text-(--dot)"
+                      style={{ '--dot': cat?.color } as CSSProperties}
+                      aria-hidden="true"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="flex items-center gap-2 truncate font-medium">
+                        {rule.name}
+                        {soon && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-expense-soft px-1.5 py-0.5 text-[11px] font-medium text-expense">
+                            <span className="size-1.5 animate-pulse rounded-full bg-expense" aria-hidden="true" />
+                            {rule.type === 'income' ? 'Arriving soon' : 'Due soon'}
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatDate(date, today)} · {formatInDays(inDays)}
+                      </p>
+                    </div>
+                    <span className={cn('tabular font-semibold', rule.type === 'income' && 'text-income')}>
+                      {rule.type === 'income' ? '+' : ''}
+                      {money(rule.amount)}
+                    </span>
+                  </Link>
                 </li>
               );
             })}

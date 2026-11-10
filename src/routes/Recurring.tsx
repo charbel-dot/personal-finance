@@ -1,5 +1,7 @@
-import { CalendarClock, Loader2, MoreHorizontal, Pause, Pencil, Play, Plus, Repeat, Trash2 } from 'lucide-react';
+import { Menu } from 'glisse';
+import { CalendarClock, Loader2, Pause, Pencil, Play, Plus, Repeat, Trash2 } from 'lucide-react';
 import { useId, useState, type CSSProperties, type ReactNode, type SyntheticEvent } from 'react';
+import { useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import { isValidIsoDate } from '../../shared/dates';
 import { centsToInput, parseAmount } from '../../shared/money';
@@ -13,13 +15,6 @@ import { TypeSwitch } from '@/components/TransactionForm';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -49,8 +44,18 @@ export default function Recurring() {
   const { recurring, categories } = useAppData();
   const money = useMoney();
   const today = localToday();
-  const [sheet, setSheet] = useState<{ open: boolean; rule?: Rule; nonce: number }>({ open: false, nonce: 0 });
+  // `?edit=<id>` (from the dashboard's Upcoming list) opens that rule straight away.
+  const [params, setParams] = useSearchParams();
+  const editId = params.get('edit');
+  const [sheet, setSheet] = useState<{ open: boolean; rule?: Rule; nonce: number }>(() => {
+    const rule = editId ? recurring.find((r) => r.id === editId) : undefined;
+    return rule ? { open: true, rule, nonce: 1 } : { open: false, nonce: 0 };
+  });
   const openSheet = (rule?: Rule) => setSheet({ open: true, rule, nonce: Date.now() });
+  const closeSheet = () => {
+    setSheet((s) => ({ ...s, open: false }));
+    if (editId) setParams({}, { replace: true });
+  };
 
   const active = recurring.filter((r) => !r.paused);
   const perMonth = (type: TransactionType) =>
@@ -88,7 +93,17 @@ export default function Recurring() {
             <div className="col-span-2 lg:col-span-1">
               <p className="text-sm text-muted-foreground">Next due</p>
               <p className="mt-1 truncate text-lg font-semibold">
-                {next ? `${next.name} · ${formatDate(nextDueDate(next, today), today)}` : '—'}
+                {next ? (
+                  <button
+                    type="button"
+                    onClick={() => openSheet(next)}
+                    className="-mx-1 max-w-full truncate rounded-md px-1 text-left outline-none hover:bg-accent/60 focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  >
+                    {next.name} · {formatDate(nextDueDate(next, today), today)}
+                  </button>
+                ) : (
+                  '—'
+                )}
               </p>
               <p className="text-xs text-muted-foreground">
                 {active.length} active · {recurring.length - active.length} paused
@@ -97,7 +112,7 @@ export default function Recurring() {
           </CardContent>
         </Card>
 
-        <Card className="gap-0 overflow-clip py-0">
+        <Card className="gap-0 py-0">
           {sorted.length === 0 ? (
             <EmptyState
               icon={Repeat}
@@ -125,7 +140,7 @@ export default function Recurring() {
 
       <ResponsiveSheet
         open={sheet.open}
-        onClose={() => setSheet((s) => ({ ...s, open: false }))}
+        onClose={closeSheet}
         title={
           sheet.rule
             ? sheet.rule.type === 'income'
@@ -134,7 +149,7 @@ export default function Recurring() {
             : 'New Recurring'
         }
       >
-        <RecurringForm key={sheet.nonce} rule={sheet.rule} onDone={() => setSheet((s) => ({ ...s, open: false }))} />
+        <RecurringForm key={sheet.nonce} rule={sheet.rule} onDone={closeSheet} />
       </ResponsiveSheet>
     </Page>
   );
@@ -198,25 +213,25 @@ function RuleRow({ rule, color, today, onEdit }: { rule: Rule; color?: string; t
         {rule.type === 'income' ? '+' : ''}
         {money(rule.amount)}
       </span>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="size-10" aria-label={`Actions for ${rule.name}`}>
-            {save.isPending ? <Loader2 className="animate-spin" /> : <MoreHorizontal />}
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onSelect={onEdit}>
-            <Pencil /> Edit
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => void togglePause()}>
-            {rule.paused ? <Play /> : <Pause />} {rule.paused ? 'Resume' : 'Pause'}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" onSelect={() => void onDelete()}>
-            <Trash2 /> Delete
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {save.isPending || remove.isPending ? (
+        <span className="grid size-10 place-items-center" aria-label="Saving">
+          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+        </span>
+      ) : (
+        <Menu
+          aria-label={`Actions for ${rule.name}`}
+          items={[
+            { label: 'Edit', icon: <Pencil />, onSelect: onEdit },
+            {
+              label: rule.paused ? 'Resume' : 'Pause',
+              icon: rule.paused ? <Play /> : <Pause />,
+              onSelect: () => void togglePause(),
+            },
+            'separator',
+            { label: 'Delete', icon: <Trash2 />, destructive: true, onSelect: () => void onDelete() },
+          ]}
+        />
+      )}
     </li>
   );
 }
@@ -315,7 +330,7 @@ function RecurringForm({ rule, onDone }: { rule?: Rule; onDone: () => void }) {
           className="h-11"
         />
       </Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3">
         <Field id={ids.amount} label={`Amount (${currencySymbol(settings.currency)})`} error={errors.amount}>
           <Input
             id={ids.amount}

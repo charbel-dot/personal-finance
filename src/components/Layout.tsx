@@ -12,7 +12,9 @@ import {
 } from 'lucide-react';
 import { Suspense, useEffect, type ReactNode } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router';
+import { Button as GlassButton } from 'glisse';
 import { ErrorBoundary } from './ErrorBoundary';
+import { GlassTabBar } from './Segmented';
 import { Logo } from './Logo';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -71,6 +73,7 @@ export function Page({ children, className }: { children: ReactNode; className?:
 export function Layout() {
   const location = useLocation();
   const { openNew } = useQuickAdd();
+  const isActive = (to: string) => (to === '/' ? location.pathname === '/' : location.pathname.startsWith(to));
   const signOut = useSignOut();
 
   // Keyboard shortcut: "n" opens quick add (ignored while typing or when a dialog is open).
@@ -89,6 +92,7 @@ export function Layout() {
 
   return (
     <div className="min-h-dvh md:pl-64">
+      <div className="app-backdrop" aria-hidden="true" />
       <a
         href="#main"
         className="fixed top-2 left-2 z-50 -translate-y-20 rounded-md bg-primary px-4 py-2 text-primary-foreground focus:translate-y-0"
@@ -98,7 +102,7 @@ export function Layout() {
 
       {/* Desktop sidebar */}
       <aside
-        className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r bg-background md:flex"
+        className="glass-panel fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r md:flex"
         aria-label="Sidebar"
       >
         <div className="flex h-20 items-center gap-3 border-b px-6">
@@ -148,7 +152,7 @@ export function Layout() {
       </aside>
 
       {/* Phone top bar: product mark + categories, account, settings */}
-      <header className="flex min-h-14 items-center justify-between border-b px-4 pt-safe md:hidden">
+      <header className="glass-panel sticky top-0 z-30 flex min-h-14 items-center justify-between border-b px-4 pt-safe md:hidden">
         <NavLink
           to="/"
           className="flex items-center gap-2.5 rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
@@ -177,7 +181,7 @@ export function Layout() {
         </div>
       </header>
 
-      <main id="main" className="pb-28 md:pb-12">
+      <main id="main" className="pb-32 md:pb-12">
         <ErrorBoundary resetKey={location.pathname}>
           <Suspense fallback={<PageFallback />}>
             <div key={location.pathname} className="animate-in duration-300 fade-in slide-in-from-bottom-1">
@@ -187,57 +191,29 @@ export function Layout() {
         </ErrorBoundary>
       </main>
 
-      {/* Phone bottom bar */}
-      <nav
-        aria-label="Main"
-        className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 pb-safe md:hidden supports-[backdrop-filter]:bg-background/90"
-      >
-        <div className="mx-auto grid h-16 max-w-lg grid-cols-5">
-          {BOTTOM_NAV.slice(0, 2).map((item) => (
-            <BottomLink key={item.to} {...item} />
-          ))}
-          <div className="grid place-items-center">
-            <button
-              type="button"
-              onClick={() => openNew('expense')}
-              aria-label="Add Transaction"
-              className="press -mt-7 grid size-14 place-items-center rounded-full border-4 border-background bg-primary text-primary-foreground shadow-lg outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
-            >
-              <Plus className="size-6" aria-hidden="true" />
-            </button>
-          </div>
-          {BOTTOM_NAV.slice(2).map((item) => (
-            <BottomLink key={item.to} {...item} />
-          ))}
+      {/* Phone bottom bar: liquid glass tab bar + floating add button */}
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:hidden">
+        <div className="pointer-events-auto mx-auto flex max-w-lg items-center gap-2.5">
+          <GlassTabBar
+            className="flex-1"
+            aria-label="Main"
+            value={BOTTOM_NAV.find((n) => isActive(n.to))?.to ?? null}
+            items={BOTTOM_NAV.map(({ to, label, icon: Icon }) => ({
+              value: to,
+              href: to,
+              label,
+              icon: <Icon aria-hidden="true" />,
+            }))}
+          />
+          <GlassButton
+            variant="filled"
+            onClick={() => openNew('expense')}
+            aria-label="Add Transaction"
+            className="size-[60px] shrink-0 rounded-full p-0 shadow-lg"
+            icon={<Plus className="size-6" aria-hidden="true" />}
+          />
         </div>
-      </nav>
+      </div>
     </div>
-  );
-}
-
-function BottomLink({ to, label, icon: Icon }: { to: string; label: string; icon: LucideIcon }) {
-  return (
-    <NavLink
-      to={to}
-      end={to === '/'}
-      className={({ isActive }) =>
-        cn(
-          'm-1 flex flex-col items-center justify-center gap-1 rounded-lg text-[11px] font-medium text-muted-foreground transition-colors outline-none',
-          'focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60',
-          isActive && 'text-foreground',
-        )
-      }
-    >
-      {({ isActive }) => (
-        <>
-          <span
-            className={cn('grid h-7 w-12 place-items-center rounded-full transition-colors', isActive && 'bg-accent')}
-          >
-            <Icon className="size-5" aria-hidden="true" />
-          </span>
-          {label}
-        </>
-      )}
-    </NavLink>
   );
 }

@@ -10,7 +10,7 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Segmented } from '@/components/Segmented';
 import { useSignOut } from '@/hooks/use-sign-out';
 import { currencySymbol } from '@/lib/format';
 import { useAppData, usePatchSettings } from '@/lib/queries';
@@ -84,22 +84,20 @@ export default function Settings() {
           </CardHeader>
           <CardContent className="divide-y">
             <Row label="Appearance" hint="Saved on this device.">
-              <ToggleGroup
-                type="single"
-                variant="outline"
-                value={theme}
-                onValueChange={(v) => {
-                  if (v) setTheme(v as ThemePref);
-                }}
+              <Segmented
+                fill
                 aria-label="Appearance"
-                className="w-full"
-              >
-                {THEMES.map(({ value, label, icon: Icon }) => (
-                  <ToggleGroupItem key={value} value={value} className="h-10 flex-1 gap-1.5">
-                    <Icon aria-hidden="true" /> {label}
-                  </ToggleGroupItem>
-                ))}
-              </ToggleGroup>
+                value={theme}
+                onValueChange={setTheme}
+                items={THEMES.map(({ value, label, icon: Icon }) => ({
+                  value,
+                  label: (
+                    <span className="flex items-center gap-1.5">
+                      <Icon className="size-4" aria-hidden="true" /> {label}
+                    </span>
+                  ),
+                }))}
+              />
             </Row>
             <Row label="Currency" htmlFor={ids.currency}>
               <Select

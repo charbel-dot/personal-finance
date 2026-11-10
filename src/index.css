@@ -1,4 +1,7 @@
 @import 'tailwindcss';
+/* Liquid glass components. Loaded here, inside a layer, instead of glisse's runtime injection
+   (disabled by the #glisse-styles marker in index.html), so Tailwind utilities still win. */
+@import 'glisse/styles.css' layer(components);
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
 @import '@fontsource-variable/inter/wght.css';
@@ -302,4 +305,113 @@
     transition-duration: 1ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* ------------------------------------------------------------------------------ glass */
+
+/* glisse tokens mapped onto the app palette (unlayered so they beat glisse's own defaults). */
+:root {
+  --lg-fill: var(--primary);
+  --lg-on: var(--income);
+  --lg-destructive: var(--destructive);
+  --lg-foreground: var(--foreground);
+  --lg-muted: var(--muted-foreground);
+  --lg-ring: color-mix(in oklch, var(--ring) 70%, transparent);
+  --lg-tab-selected: var(--foreground);
+  /* Translucent panels (cards, sheets, menus) */
+  --glass-panel: color-mix(in oklch, var(--card) 66%, transparent);
+  --glass-panel-strong: color-mix(in oklch, var(--card) 86%, transparent);
+  --glass-edge: oklch(0 0 0 / 7%);
+  --glass-shine: oklch(1 0 0 / 70%);
+  --glass-shadow: oklch(0.2 0 0 / 8%);
+}
+.dark {
+  --glass-panel: color-mix(in oklch, var(--card) 58%, transparent);
+  --glass-panel-strong: color-mix(in oklch, var(--card) 82%, transparent);
+  --glass-edge: oklch(1 0 0 / 10%);
+  --glass-shine: oklch(1 0 0 / 9%);
+  --glass-shadow: oklch(0 0 0 / 40%);
+}
+
+@layer components {
+  /* Filled glass buttons use the app's primary (black in light, white in dark). */
+  .lg-button[data-variant='filled'] {
+    color: var(--primary-foreground);
+  }
+  .lg-button[data-variant='filled'][data-destructive] {
+    color: #fff;
+  }
+  .lg-button:disabled {
+    opacity: 0.5;
+  }
+  /* Inputs: full width, 44px touch target, 16px text on phones so iOS doesn't zoom. */
+  .lg-input {
+    max-width: none;
+    height: 44px;
+    border-radius: 14px;
+  }
+  .lg-input input {
+    font-size: max(16px, 1em);
+  }
+  @media (min-width: 768px) {
+    .lg-input input {
+      font-size: inherit;
+    }
+  }
+  .lg-input:has(input[aria-invalid='true']) {
+    box-shadow:
+      inset 0 0 0 1.5px var(--destructive),
+      0 1px 3px var(--lg-drop);
+  }
+  .lg-input:has(input:focus-visible) {
+    outline: 2px solid var(--lg-ring);
+    outline-offset: 2px;
+  }
+  .lg-input:has(input:disabled) {
+    opacity: 0.5;
+  }
+
+  /* Frosted panel for cards, sheets, dialogs and popovers. */
+  .glass-panel {
+    background-color: var(--glass-panel);
+    -webkit-backdrop-filter: blur(24px) saturate(1.6);
+    backdrop-filter: blur(24px) saturate(1.6);
+    border-color: var(--glass-edge);
+    box-shadow:
+      inset 0 1px 0 var(--glass-shine),
+      0 10px 30px -14px var(--glass-shadow);
+  }
+  .glass-panel-strong {
+    background-color: var(--glass-panel-strong);
+    -webkit-backdrop-filter: blur(32px) saturate(1.8);
+    backdrop-filter: blur(32px) saturate(1.8);
+    border-color: var(--glass-edge);
+    box-shadow:
+      inset 0 1px 0 var(--glass-shine),
+      0 24px 60px -20px var(--glass-shadow);
+  }
+}
+
+/* Soft colour behind everything so the glass has something to refract. */
+.app-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(60% 45% at 8% 0%, color-mix(in oklch, var(--brand) 22%, transparent), transparent 70%),
+    radial-gradient(55% 40% at 100% 35%, color-mix(in oklch, var(--income) 16%, transparent), transparent 70%),
+    radial-gradient(
+      60% 45% at 30% 100%,
+      color-mix(in oklch, var(--chart-2, var(--income)) 14%, transparent),
+      transparent 70%
+    ),
+    var(--background);
+}
+
+/* glisse menus render inline, not in a portal. Glass panels and the staggered sections are stacking
+   contexts, so lift whatever holds an open menu above its siblings or the menu slides under them. */
+:is([data-slot='card'], .stagger > *, li):has(.lg-menu > [aria-expanded='true']) {
+  position: relative;
+  z-index: 40;
 }
