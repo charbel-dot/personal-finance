@@ -3,15 +3,21 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import pkg from './package.json' with { type: 'json' };
+
+/** Bumped with `npm version`: names the service-worker caches so each release starts clean. */
+const APP_VERSION = pkg.version;
 
 export default defineConfig({
+  define: { __APP_VERSION__: JSON.stringify(APP_VERSION) },
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   plugins: [
     react(),
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      injectRegister: 'script-defer',
+      // Registered from src/lib/pwa.ts so the app can also check for updates when it's reopened.
+      injectRegister: false,
       includeAssets: ['favicon.svg', 'favicon.ico', 'apple-touch-icon.png', 'theme-init.js'],
       manifest: {
         name: 'Money — personal finance',
@@ -35,6 +41,7 @@ export default defineConfig({
         ],
       },
       workbox: {
+        cacheId: `money-${APP_VERSION}`,
         globPatterns: ['**/*.{js,css,html,svg,png,ico}', 'assets/inter-latin-*.woff2'],
         navigateFallback: '/index.html',
         // Never let the service worker touch the API: data must always be fresh and authenticated.

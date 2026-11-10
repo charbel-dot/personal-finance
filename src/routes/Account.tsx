@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useCountUp } from '@/hooks/use-count-up';
 import { useSignOut } from '@/hooks/use-sign-out';
 import { useMoney } from '@/lib/format';
+import { APP_VERSION } from '@/lib/pwa';
 import { useAppData, useBalance, useMe, useSavings, useTransactions } from '@/lib/queries';
 
 const longDate = new Intl.DateTimeFormat(undefined, {
@@ -51,7 +52,7 @@ export default function Account() {
 
   return (
     <Page>
-      <PageHeader title="Account" subtitle="Your profile, session and data." />
+      <PageHeader title="Account" subtitle={`Your profile, session and data · App version ${APP_VERSION}`} />
       <div className="stagger grid gap-3 sm:gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-3">
           <CardContent className="flex flex-wrap items-center gap-4">

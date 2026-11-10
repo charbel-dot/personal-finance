@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { ApiError } from './lib/api';
 import { keys } from './lib/queries';
+import { registerPwa } from './lib/pwa';
 
 const queryClient: QueryClient = new QueryClient({
   queryCache: new QueryCache({
@@ -22,6 +23,8 @@ const queryClient: QueryClient = new QueryClient({
     },
   },
 });
+
+registerPwa();
 
 const root = document.getElementById('root');
 if (!root) throw new Error('Missing #root');

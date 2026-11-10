@@ -195,6 +195,17 @@
       font-size: inherit;
     }
   }
+  /* iOS Safari gives date inputs an intrinsic min-width and centres the value, so they overflow
+     narrow grid cells. Let them shrink like any other input and align the value left. */
+  input[type='date'] {
+    min-width: 0;
+    max-width: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  input[type='date']::-webkit-date-and-time-value {
+    text-align: left;
+  }
   input[type='date']::-webkit-calendar-picker-indicator {
     cursor: pointer;
     opacity: 0.6;

@@ -689,8 +689,8 @@ function CustomRange({ period, onChange }: { period: Period; onChange: (p: Perio
   const tooLong = daysBetween(period.from, period.to) > 3650;
   return (
     <Card className="mb-4 animate-in py-4 fade-in slide-in-from-top-1">
-      <CardContent className="grid grid-cols-2 gap-3 px-4 sm:max-w-md">
-        <div className="space-y-1.5">
+      <CardContent className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3 px-4 sm:max-w-md">
+        <div className="min-w-0 space-y-1.5">
           <Label htmlFor="range-from">From</Label>
           <Input
             id="range-from"
@@ -703,7 +703,7 @@ function CustomRange({ period, onChange }: { period: Period; onChange: (p: Perio
             }}
           />
         </div>
-        <div className="space-y-1.5">
+        <div className="min-w-0 space-y-1.5">
           <Label htmlFor="range-to">To</Label>
           <Input
             id="range-to"
