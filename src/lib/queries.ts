@@ -172,9 +172,18 @@ export function useDeleteUser() {
 }
 
 export function useResetPassword() {
-  return useMutation({ mutationFn: (v: { id: string; password: string }) => api.resetPassword(v.id, v.password) });
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: string; password: string }) => api.resetPassword(v.id, v.password),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.users }),
+  });
 }
 
+/** The server re-issues this device's session on success, so the session details are refetched. */
 export function useChangePassword() {
-  return useMutation({ mutationFn: api.changePassword });
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: api.changePassword,
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.me }),
+  });
 }

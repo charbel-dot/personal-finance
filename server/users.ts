@@ -108,7 +108,9 @@ export async function deleteUser(bucket: R2Bucket, userId: string): Promise<void
   });
   if (!changed) throw new NotFoundError('User');
   const keys = await listKeys(bucket, userPrefix(userId));
-  for (let i = 0; i < keys.length; i += 1000) await bucket.delete(keys.slice(i, i + 1000));
+  const batches = [];
+  for (let i = 0; i < keys.length; i += 1000) batches.push(keys.slice(i, i + 1000));
+  await Promise.all(batches.map((batch) => bucket.delete(batch)));
 }
 
 export async function memberIds(bucket: R2Bucket): Promise<string[]> {

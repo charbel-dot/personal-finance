@@ -44,7 +44,7 @@ import {
   useTransactions,
 } from '@/lib/queries';
 import { localToday } from '@/lib/today';
-import { cn } from '@/lib/utils';
+import { cn, errorMessage } from '@/lib/utils';
 
 type EntrySheet = {
   kind: 'entry';
@@ -60,7 +60,6 @@ const NO_GOAL = 'none';
 
 export default function Savings() {
   const { categories, settings } = useAppData();
-  const money = useMoney();
   const today = localToday();
   const savings = useSavings();
   const month = useMemo(() => ({ from: startOfMonth(today), to: endOfMonth(today) }), [today]);
@@ -103,7 +102,6 @@ export default function Savings() {
 
   const monthIncome = (monthTx.data ?? []).filter((t) => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
   const target = Math.round((monthIncome * settings.budgetRule.savings) / 100);
-  const monthRatio = target > 0 ? Math.min(1, Math.max(0, thisMonth.total / target)) : 0;
 
   function showHistory(filter: { source?: string; goal?: string }) {
     update({ source: filter.source ?? null, goal: filter.goal ?? null });
@@ -130,103 +128,27 @@ export default function Savings() {
         </Card>
       ) : (
         <div className="stagger space-y-6">
-          <Card className="py-5">
-            <CardContent className="grid grid-cols-2 gap-5 lg:grid-cols-3">
-              <button
-                type="button"
-                onClick={() => showHistory({})}
-                className="-m-2 rounded-xl p-2 text-left outline-none hover:bg-accent/50 focus-visible:ring-[3px] focus-visible:ring-ring/50"
-              >
-                <span className="block text-sm text-muted-foreground">Total saved</span>
-                {savings.isPending ? (
-                  <Skeleton className="mt-2 h-8 w-32" />
-                ) : (
-                  <span className="tabular mt-1 block text-2xl font-bold tracking-tight text-income sm:text-3xl">
-                    {money(all.total)}
-                  </span>
-                )}
-              </button>
-              <div>
-                <p className="text-sm text-muted-foreground">This month</p>
-                {savings.isPending ? (
-                  <Skeleton className="mt-2 h-8 w-24" />
-                ) : (
-                  <p className="tabular mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
-                    {money(thisMonth.total, { signed: true })}
-                  </p>
-                )}
-              </div>
-              <div className="col-span-2 lg:col-span-1">
-                <p className="text-sm text-muted-foreground">
-                  Monthly target · {settings.budgetRule.savings}% of income
-                </p>
-                {target > 0 ? (
-                  <>
-                    <p className="tabular mt-1 text-lg font-semibold">
-                      {money(Math.max(0, thisMonth.total))} <span className="text-muted-foreground">of</span>{' '}
-                      {money(target)}
-                    </p>
-                    <div
-                      className="mt-2 h-2 overflow-hidden rounded-full bg-muted"
-                      role="progressbar"
-                      aria-label="Savings target progress"
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      aria-valuenow={Math.round(monthRatio * 100)}
-                    >
-                      <div
-                        className="h-full rounded-full bg-income transition-[width] duration-500 motion-reduce:transition-none"
-                        style={{ width: `${monthRatio * 100}%` }}
-                      />
-                    </div>
-                  </>
-                ) : (
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {monthTx.isPending ? '…' : 'Log income this month to get a target.'}
-                  </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+          <SummaryCard
+            loading={savings.isPending}
+            incomePending={monthTx.isPending}
+            total={all.total}
+            monthTotal={thisMonth.total}
+            target={target}
+            percent={settings.budgetRule.savings}
+            onShowAll={() => showHistory({})}
+          />
 
-          <section aria-labelledby="goals" className="space-y-2">
-            <div className="flex items-center justify-between gap-3">
-              <h2 id="goals" className="text-sm font-medium text-muted-foreground">
-                Goals
-              </h2>
-              <Button variant="ghost" size="sm" onClick={() => open({ kind: 'goal' })} disabled={!savings.data}>
-                <Plus aria-hidden="true" /> New Goal
-              </Button>
-            </div>
-            {savings.isPending ? (
-              <Skeleton className="h-36 rounded-2xl" />
-            ) : progress.length === 0 ? (
-              <Card className="py-0">
-                <EmptyState
-                  icon={Target}
-                  title="No Goals Yet"
-                  action={<Button onClick={() => open({ kind: 'goal' })}>Create a Goal</Button>}
-                >
-                  Save towards something specific, like an emergency fund or a trip, and see how much to put aside each
-                  month.
-                </EmptyState>
-              </Card>
-            ) : (
-              <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-label="Savings goals">
-                {progress.map((p) => (
-                  <GoalCard
-                    key={p.goal.id}
-                    progress={p}
-                    today={today}
-                    selected={goalFilter === p.goal.id}
-                    onShow={() => showHistory({ goal: p.goal.id })}
-                    onAdd={() => open({ kind: 'entry', goalId: p.goal.id, savingsKind: 'deposit' })}
-                    onEdit={() => open({ kind: 'goal', goal: p.goal })}
-                  />
-                ))}
-              </ul>
-            )}
-          </section>
+          <GoalsSection
+            loading={savings.isPending}
+            disabled={!savings.data}
+            progress={progress}
+            today={today}
+            selectedId={goalFilter}
+            onNew={() => open({ kind: 'goal' })}
+            onShow={(id) => showHistory({ goal: id })}
+            onAdd={(id) => open({ kind: 'entry', goalId: id, savingsKind: 'deposit' })}
+            onEdit={(goal) => open({ kind: 'goal', goal })}
+          />
 
           <section aria-labelledby="by-source" className="space-y-2">
             <h2 id="by-source" className="text-sm font-medium text-muted-foreground">
@@ -253,68 +175,22 @@ export default function Savings() {
             </Card>
           </section>
 
-          <section aria-labelledby="savings-history-title" className="scroll-mt-20 space-y-2" id="savings-history">
-            <div className="flex min-h-9 items-center justify-between gap-3">
-              <h2 id="savings-history-title" className="text-sm font-medium text-muted-foreground">
-                History
-              </h2>
-              {filterLabel && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => update({ source: null, goal: null })}
-                  aria-label={`Clear filter: ${filterLabel}`}
-                >
-                  <span className="max-w-48 truncate">{filterLabel}</span>
-                  <X aria-hidden="true" />
-                </Button>
-              )}
-            </div>
-            <Card className="gap-0 overflow-clip py-0">
-              {savings.isPending ? (
-                <RowsSkeleton />
-              ) : shown.length === 0 ? (
-                <EmptyState
-                  icon={PiggyBank}
-                  title={entries.length === 0 ? 'No Savings Yet' : 'Nothing Here'}
-                  action={<Button onClick={() => open({ kind: 'entry' })}>Add Savings</Button>}
-                >
-                  {entries.length === 0
-                    ? 'Log what you set aside from each income source, and watch the total grow.'
-                    : 'No entries match this filter yet.'}
-                </EmptyState>
-              ) : (
-                <ul className="divide-y" aria-label="Savings entries">
-                  {shown.map((e) => (
-                    <EntryRow
-                      key={e.id}
-                      entry={e}
-                      source={sourceById.get(e.sourceId)}
-                      goal={e.goalId ? goalById.get(e.goalId) : undefined}
-                      today={today}
-                      onEdit={() => open({ kind: 'entry', entry: e })}
-                    />
-                  ))}
-                </ul>
-              )}
-            </Card>
-          </section>
+          <HistorySection
+            loading={savings.isPending}
+            hasEntries={entries.length > 0}
+            shown={shown}
+            filterLabel={filterLabel}
+            sourceById={sourceById}
+            goalById={goalById}
+            today={today}
+            onClearFilter={() => update({ source: null, goal: null })}
+            onAdd={() => open({ kind: 'entry' })}
+            onEdit={(entry) => open({ kind: 'entry', entry })}
+          />
         </div>
       )}
 
-      <ResponsiveSheet
-        open={sheet.open}
-        onClose={close}
-        title={
-          sheet.content.kind === 'goal'
-            ? sheet.content.goal
-              ? 'Edit Goal'
-              : 'New Goal'
-            : sheet.content.entry
-              ? 'Edit Savings'
-              : 'Add Savings'
-        }
-      >
+      <ResponsiveSheet open={sheet.open} onClose={close} title={sheetTitle(sheet.content)}>
         {sheet.content.kind === 'goal' ? (
           <GoalForm key={sheet.nonce} goal={sheet.content.goal} onDone={close} />
         ) : (
@@ -331,6 +207,216 @@ export default function Savings() {
         )}
       </ResponsiveSheet>
     </Page>
+  );
+}
+
+function sheetTitle(content: EntrySheet | GoalSheet) {
+  if (content.kind === 'goal') return content.goal ? 'Edit Goal' : 'New Goal';
+  return content.entry ? 'Edit Savings' : 'Add Savings';
+}
+
+/** Total saved, this month, and progress towards the monthly target from the budget rule. */
+function SummaryCard({
+  loading,
+  incomePending,
+  total,
+  monthTotal,
+  target,
+  percent,
+  onShowAll,
+}: {
+  loading: boolean;
+  incomePending: boolean;
+  total: number;
+  monthTotal: number;
+  target: number;
+  percent: number;
+  onShowAll: () => void;
+}) {
+  const money = useMoney();
+  const monthRatio = target > 0 ? Math.min(1, Math.max(0, monthTotal / target)) : 0;
+  return (
+    <Card className="py-5">
+      <CardContent className="grid grid-cols-2 gap-5 lg:grid-cols-3">
+        <button
+          type="button"
+          onClick={onShowAll}
+          className="-m-2 rounded-xl p-2 text-left outline-none hover:bg-accent/50 focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        >
+          <span className="block text-sm text-muted-foreground">Total saved</span>
+          {loading ? (
+            <Skeleton className="mt-2 h-8 w-32" />
+          ) : (
+            <span className="tabular mt-1 block text-2xl font-bold tracking-tight text-income sm:text-3xl">
+              {money(total)}
+            </span>
+          )}
+        </button>
+        <div>
+          <p className="text-sm text-muted-foreground">This month</p>
+          {loading ? (
+            <Skeleton className="mt-2 h-8 w-24" />
+          ) : (
+            <p className="tabular mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
+              {money(monthTotal, { signed: true })}
+            </p>
+          )}
+        </div>
+        <div className="col-span-2 lg:col-span-1">
+          <p className="text-sm text-muted-foreground">Monthly target · {percent}% of income</p>
+          {target > 0 ? (
+            <>
+              <p className="tabular mt-1 text-lg font-semibold">
+                {money(Math.max(0, monthTotal))} <span className="text-muted-foreground">of</span> {money(target)}
+              </p>
+              <div
+                className="mt-2 h-2 overflow-hidden rounded-full bg-muted"
+                role="progressbar"
+                aria-label="Savings target progress"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(monthRatio * 100)}
+              >
+                <div
+                  className="h-full rounded-full bg-income transition-[width] duration-500 motion-reduce:transition-none"
+                  style={{ width: `${monthRatio * 100}%` }}
+                />
+              </div>
+            </>
+          ) : (
+            <p className="mt-1 text-sm text-muted-foreground">
+              {incomePending ? '…' : 'Log income this month to get a target.'}
+            </p>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function GoalsSection({
+  loading,
+  disabled,
+  progress,
+  today,
+  selectedId,
+  onNew,
+  onShow,
+  onAdd,
+  onEdit,
+}: {
+  loading: boolean;
+  disabled: boolean;
+  progress: GoalProgress[];
+  today: string;
+  selectedId: string | null;
+  onNew: () => void;
+  onShow: (goalId: string) => void;
+  onAdd: (goalId: string) => void;
+  onEdit: (goal: SavingsGoal) => void;
+}) {
+  return (
+    <section aria-labelledby="goals" className="space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <h2 id="goals" className="text-sm font-medium text-muted-foreground">
+          Goals
+        </h2>
+        <Button variant="ghost" size="sm" onClick={onNew} disabled={disabled}>
+          <Plus aria-hidden="true" /> New Goal
+        </Button>
+      </div>
+      {loading ? (
+        <Skeleton className="h-36 rounded-2xl" />
+      ) : progress.length === 0 ? (
+        <Card className="py-0">
+          <EmptyState icon={Target} title="No Goals Yet" action={<Button onClick={onNew}>Create a Goal</Button>}>
+            Save towards something specific, like an emergency fund or a trip, and see how much to put aside each month.
+          </EmptyState>
+        </Card>
+      ) : (
+        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-label="Savings goals">
+          {progress.map((p) => (
+            <GoalCard
+              key={p.goal.id}
+              progress={p}
+              today={today}
+              selected={selectedId === p.goal.id}
+              onShow={() => onShow(p.goal.id)}
+              onAdd={() => onAdd(p.goal.id)}
+              onEdit={() => onEdit(p.goal)}
+            />
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function HistorySection({
+  loading,
+  hasEntries,
+  shown,
+  filterLabel,
+  sourceById,
+  goalById,
+  today,
+  onClearFilter,
+  onAdd,
+  onEdit,
+}: {
+  loading: boolean;
+  hasEntries: boolean;
+  shown: SavingsEntry[];
+  filterLabel: string;
+  sourceById: Map<string, Category>;
+  goalById: Map<string, SavingsGoal>;
+  today: string;
+  onClearFilter: () => void;
+  onAdd: () => void;
+  onEdit: (entry: SavingsEntry) => void;
+}) {
+  return (
+    <section aria-labelledby="savings-history-title" className="scroll-mt-20 space-y-2" id="savings-history">
+      <div className="flex min-h-9 items-center justify-between gap-3">
+        <h2 id="savings-history-title" className="text-sm font-medium text-muted-foreground">
+          History
+        </h2>
+        {filterLabel && (
+          <Button variant="ghost" size="sm" onClick={onClearFilter} aria-label={`Clear filter: ${filterLabel}`}>
+            <span className="max-w-48 truncate">{filterLabel}</span>
+            <X aria-hidden="true" />
+          </Button>
+        )}
+      </div>
+      <Card className="gap-0 overflow-clip py-0">
+        {loading ? (
+          <RowsSkeleton />
+        ) : shown.length === 0 ? (
+          <EmptyState
+            icon={PiggyBank}
+            title={!hasEntries ? 'No Savings Yet' : 'Nothing Here'}
+            action={<Button onClick={onAdd}>Add Savings</Button>}
+          >
+            {!hasEntries
+              ? 'Log what you set aside from each income source, and watch the total grow.'
+              : 'No entries match this filter yet.'}
+          </EmptyState>
+        ) : (
+          <ul className="divide-y" aria-label="Savings entries">
+            {shown.map((e) => (
+              <EntryRow
+                key={e.id}
+                entry={e}
+                source={sourceById.get(e.sourceId)}
+                goal={e.goalId ? goalById.get(e.goalId) : undefined}
+                today={today}
+                onEdit={() => onEdit(e)}
+              />
+            ))}
+          </ul>
+        )}
+      </Card>
+    </section>
   );
 }
 
@@ -399,7 +485,7 @@ function GoalCard({
       await remove.mutateAsync(goal.id);
       toast.success(`${goal.name} deleted`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Couldn’t delete. Check your connection and try again.');
+      toast.error(errorMessage(err, 'Couldn’t delete. Check your connection and try again.'));
     }
   }
 
@@ -599,6 +685,143 @@ function KindSwitch({ value, onChange }: { value: SavingsKind; onChange: (k: Sav
   );
 }
 
+function defaultSource(sources: Category[], lastUsed: string | undefined) {
+  return (sources.find((c) => c.id === lastUsed) ?? sources.at(0))?.id ?? '';
+}
+
+function validateSavings(v: {
+  cents: number | null;
+  kind: SavingsKind;
+  limit: number;
+  sourceId: string;
+  date: string;
+  money: (cents: number) => string;
+}): Record<string, string> {
+  const errors: Record<string, string> = {};
+  if (v.cents === null) errors.amount = 'Enter an amount greater than zero';
+  else if (v.kind === 'withdrawal' && v.cents > v.limit) {
+    errors.amount = `You only have ${v.money(Math.max(0, v.limit))} saved`;
+  }
+  if (!v.sourceId) errors.sourceId = 'Pick a source';
+  if (!isValidIsoDate(v.date)) errors.date = 'Pick a valid date';
+  return errors;
+}
+
+function savedMessage(v: { editing: boolean; kind: SavingsKind; amount: string; source?: string; goal?: string }) {
+  if (v.editing) return 'Savings updated';
+  if (v.kind === 'withdrawal') return `Withdrew ${v.amount}`;
+  return `Saved ${v.amount} from ${v.source ?? 'savings'}${v.goal ? ` towards ${v.goal}` : ''}`;
+}
+
+/** Starting values for the savings form: the entry being edited, else the given defaults. */
+function savingsDefaults(
+  entry: SavingsEntry | undefined,
+  fallback: { kind?: SavingsKind; sourceId: string; goalId?: string },
+) {
+  if (entry) {
+    return {
+      kind: entry.kind,
+      amount: centsToInput(entry.amount),
+      sourceId: entry.sourceId,
+      goalId: entry.goalId ?? NO_GOAL,
+      date: entry.date,
+      note: entry.note ?? '',
+    };
+  }
+  return {
+    kind: fallback.kind ?? 'deposit',
+    amount: '',
+    sourceId: fallback.sourceId,
+    goalId: fallback.goalId ?? NO_GOAL,
+    date: localToday(),
+    note: '',
+  };
+}
+
+/** What could be withdrawn (the edited entry excluded): from the picked goal, never more than overall. */
+function withdrawLimit(entries: SavingsEntry[], editingId: string | undefined, goalId: string) {
+  const others = entries.filter((e) => e.id !== editingId);
+  const pool = goalId === NO_GOAL ? others : others.filter((e) => e.goalId === goalId);
+  const available = pool.reduce((acc, e) => acc + signedAmount(e), 0);
+  return Math.min(available, savingsBalance(others));
+}
+
+function WithdrawHint({ show, available }: { show: boolean; available: string }) {
+  if (!show) return null;
+  return <p className="text-xs text-muted-foreground">Available: {available}</p>;
+}
+
+function GoalSelect({
+  id,
+  goals,
+  value,
+  onChange,
+}: {
+  id: string;
+  goals: SavingsGoal[];
+  value: string;
+  onChange: (goalId: string) => void;
+}) {
+  if (goals.length === 0) return null;
+  return (
+    <Field id={id} label="Goal (optional)">
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger id={id} className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={NO_GOAL}>No goal</SelectItem>
+          {goals.map((g) => (
+            <SelectItem key={g.id} value={g.id}>
+              {g.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </Field>
+  );
+}
+
+function savingsSubmitLabel(editing: boolean, kind: SavingsKind) {
+  if (editing) return 'Save Changes';
+  return kind === 'deposit' ? 'Add to Savings' : 'Withdraw';
+}
+
+function SavingsFooter({
+  editing,
+  kind,
+  saving,
+  deleting,
+  onDelete,
+}: {
+  editing: boolean;
+  kind: SavingsKind;
+  saving: boolean;
+  deleting: boolean;
+  onDelete: () => void;
+}) {
+  return (
+    <SheetFooter>
+      {editing && (
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-11 text-destructive hover:text-destructive"
+          onClick={onDelete}
+          disabled={deleting}
+        >
+          {deleting ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Trash2 aria-hidden="true" />}
+          Delete
+        </Button>
+      )}
+      <Button type="submit" size="lg" className="press flex-1" disabled={saving}>
+        {saving && <Loader2 className="animate-spin" aria-hidden="true" />}
+        {savingsSubmitLabel(editing, kind)}
+      </Button>
+    </SheetFooter>
+  );
+}
+
 function SavingsForm({
   entry,
   initialSourceId,
@@ -624,34 +847,27 @@ function SavingsForm({
   const ids = { amount: useId(), date: useId(), note: useId(), goal: useId() };
   const sources = categories.income.filter((c) => !c.archived || c.id === entry?.sourceId);
 
-  const [kind, setKind] = useState<SavingsKind>(entry?.kind ?? initialKind ?? 'deposit');
-  const [amount, setAmount] = useState(entry ? centsToInput(entry.amount) : '');
-  const [sourceId, setSourceId] = useState(
-    entry?.sourceId ??
-      initialSourceId ??
-      (sources.find((c) => c.id === settings.lastIncomeCategoryId) ?? sources.at(0))?.id ??
-      '',
+  const [initial] = useState(() =>
+    savingsDefaults(entry, {
+      kind: initialKind,
+      sourceId: initialSourceId ?? defaultSource(sources, settings.lastIncomeCategoryId),
+      goalId: initialGoalId,
+    }),
   );
-  const [goalId, setGoalId] = useState(entry?.goalId ?? initialGoalId ?? NO_GOAL);
-  const [date, setDate] = useState(entry?.date ?? localToday());
-  const [note, setNote] = useState(entry?.note ?? '');
+  const [kind, setKind] = useState<SavingsKind>(initial.kind);
+  const [amount, setAmount] = useState(initial.amount);
+  const [sourceId, setSourceId] = useState(initial.sourceId);
+  const [goalId, setGoalId] = useState(initial.goalId);
+  const [date, setDate] = useState(initial.date);
+  const [note, setNote] = useState(initial.note);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // What could be withdrawn (this entry itself excluded): from the goal when one is picked, else overall.
-  const others = entries.filter((e) => e.id !== entry?.id);
-  const pool = goalId === NO_GOAL ? others : others.filter((e) => e.goalId === goalId);
-  const available = pool.reduce((acc, e) => acc + signedAmount(e), 0);
-  const overall = savingsBalance(others);
-  const limit = Math.min(available, overall);
+  const limit = withdrawLimit(entries, entry?.id, goalId);
 
   async function onSubmit(e: SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     const cents = parseAmount(amount);
-    const next: Record<string, string> = {};
-    if (cents === null) next.amount = 'Enter an amount greater than zero';
-    else if (kind === 'withdrawal' && cents > limit) next.amount = `You only have ${money(Math.max(0, limit))} saved`;
-    if (!sourceId) next.sourceId = 'Pick a source';
-    if (!isValidIsoDate(date)) next.date = 'Pick a valid date';
+    const next = validateSavings({ cents, kind, limit, sourceId, date, money });
     setErrors(next);
     if (cents === null || Object.keys(next).length > 0) {
       if (next.amount) document.getElementById(ids.amount)?.focus();
@@ -670,18 +886,18 @@ function SavingsForm({
           note: note.trim() || undefined,
         },
       });
-      const source = sources.find((c) => c.id === sourceId)?.name ?? 'savings';
-      const goalName = goals.find((g) => g.id === goalId)?.name;
       toast.success(
-        entry
-          ? 'Savings updated'
-          : kind === 'deposit'
-            ? `Saved ${money(cents)} from ${source}${goalName ? ` towards ${goalName}` : ''}`
-            : `Withdrew ${money(cents)}`,
+        savedMessage({
+          editing: Boolean(entry),
+          kind,
+          amount: money(cents),
+          source: sources.find((c) => c.id === sourceId)?.name,
+          goal: goals.find((g) => g.id === goalId)?.name,
+        }),
       );
       onDone();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Couldn’t save. Check your connection and try again.');
+      toast.error(errorMessage(err, 'Couldn’t save. Check your connection and try again.'));
     }
   }
 
@@ -699,7 +915,7 @@ function SavingsForm({
       toast.success('Entry deleted');
       onDone();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Couldn’t delete. Check your connection and try again.');
+      toast.error(errorMessage(err, 'Couldn’t delete. Check your connection and try again.'));
     }
   }
 
@@ -720,9 +936,7 @@ function SavingsForm({
           aria-invalid={Boolean(errors.amount)}
           onChange={(e) => setAmount(e.target.value.replace(/[^\d.,]/g, ''))}
         />
-        {kind === 'withdrawal' && !errors.amount && (
-          <p className="text-xs text-muted-foreground">Available: {money(Math.max(0, limit))}</p>
-        )}
+        <WithdrawHint show={kind === 'withdrawal' && !errors.amount} available={money(Math.max(0, limit))} />
       </Field>
       <CategoryPicker
         name="savings-source"
@@ -732,23 +946,7 @@ function SavingsForm({
         onChange={setSourceId}
         error={errors.sourceId}
       />
-      {goals.length > 0 && (
-        <Field id={ids.goal} label="Goal (optional)">
-          <Select value={goalId} onValueChange={setGoalId}>
-            <SelectTrigger id={ids.goal} className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NO_GOAL}>No goal</SelectItem>
-              {goals.map((g) => (
-                <SelectItem key={g.id} value={g.id}>
-                  {g.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-      )}
+      <GoalSelect id={ids.goal} goals={goals} value={goalId} onChange={setGoalId} />
       <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-3">
         <Field id={ids.date} label="Date" error={errors.date}>
           <Input
@@ -773,24 +971,13 @@ function SavingsForm({
           />
         </Field>
       </div>
-      <SheetFooter>
-        {entry && (
-          <Button
-            type="button"
-            variant="ghost"
-            className="h-11 text-destructive hover:text-destructive"
-            onClick={() => void onDelete()}
-            disabled={remove.isPending}
-          >
-            {remove.isPending ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Trash2 aria-hidden="true" />}
-            Delete
-          </Button>
-        )}
-        <Button type="submit" size="lg" className="press flex-1" disabled={save.isPending}>
-          {save.isPending && <Loader2 className="animate-spin" aria-hidden="true" />}
-          {entry ? 'Save Changes' : kind === 'deposit' ? 'Add to Savings' : 'Withdraw'}
-        </Button>
-      </SheetFooter>
+      <SavingsFooter
+        editing={Boolean(entry)}
+        kind={kind}
+        saving={save.isPending}
+        deleting={remove.isPending}
+        onDelete={() => void onDelete()}
+      />
     </form>
   );
 }

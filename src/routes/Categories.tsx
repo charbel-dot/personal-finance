@@ -17,7 +17,7 @@ import { useConfirm } from '@/context/confirm';
 import { useMoney } from '@/lib/format';
 import { useAppData, useSaveCategories, useTransactions } from '@/lib/queries';
 import { localToday } from '@/lib/today';
-import { cn } from '@/lib/utils';
+import { cn, errorMessage } from '@/lib/utils';
 
 const GROUPS: { value: BudgetGroup; label: string; hint: string }[] = [
   { value: 'needs', label: 'Needs', hint: 'Rent, groceries, bills: the 50%' },
@@ -264,6 +264,129 @@ function ArchivedList({ items, type }: { items: Category[]; type: TransactionTyp
   );
 }
 
+/** Why `name` can't be used, or null when it can. */
+function nameProblem(list: Category[], name: string, selfId: string | undefined) {
+  if (!name) return 'Give it a name';
+  const clash = list.some((c) => c.id !== selfId && !c.archived && c.name.toLowerCase() === name.toLowerCase());
+  return clash ? 'You already have one with this name. Pick a different name.' : null;
+}
+
+/** The saved category and its list with it added or replaced. */
+function upsertCategory(
+  doc: CategoriesDoc,
+  type: TransactionType,
+  existing: Category | undefined,
+  fields: { name: string; color: string; group: BudgetGroup },
+) {
+  const taken = new Set([...doc.expense, ...doc.income].map((c) => c.id));
+  const item: Category = {
+    id: existing?.id ?? slug(fields.name, taken),
+    name: fields.name.slice(0, 40),
+    color: fields.color,
+    ...(type === 'expense' ? { group: fields.group } : {}),
+  };
+  const list = existing ? doc[type].map((c) => (c.id === existing.id ? item : c)) : [...doc[type], item];
+  return { item, list };
+}
+
+function ColourField({ id, value, onChange }: { id: string; value: string; onChange: (c: string) => void }) {
+  return (
+    <fieldset className="space-y-2">
+      <legend className="mb-2 text-sm font-medium">Colour</legend>
+      <div className="flex flex-wrap gap-2">
+        {CATEGORY_COLORS.map((c) => (
+          <label
+            key={c}
+            className="grid size-9 place-items-center rounded-full bg-(--c) ring-offset-2 ring-offset-background transition-transform hover:scale-110 has-[:checked]:ring-2 has-[:checked]:ring-foreground has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring"
+            style={{ '--c': c } as CSSProperties}
+          >
+            <input
+              type="radio"
+              name="colour"
+              value={c}
+              checked={value === c}
+              onChange={() => onChange(c)}
+              className="sr-only"
+              aria-label={c}
+            />
+            {value === c && <Check className={cn('size-4', inkOn(c))} aria-hidden="true" />}
+          </label>
+        ))}
+        <label
+          className="relative grid size-9 place-items-center rounded-full border border-dashed text-xs text-muted-foreground has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring"
+          title="Custom colour"
+        >
+          <span aria-hidden="true">+</span>
+          <input
+            id={id}
+            type="color"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className="absolute inset-0 opacity-0"
+            aria-label="Custom colour"
+          />
+        </label>
+      </div>
+    </fieldset>
+  );
+}
+
+function GroupField({ id, value, onChange }: { id: string; value: BudgetGroup; onChange: (g: BudgetGroup) => void }) {
+  return (
+    <div className="space-y-2">
+      <Label id={id}>Budget group</Label>
+      <Segmented
+        fill
+        aria-label="Budget group"
+        value={value}
+        onValueChange={onChange}
+        items={GROUPS.map((g) => ({ value: g.value, label: g.label }))}
+      />
+      <p className="text-xs text-muted-foreground">{GROUPS.find((g) => g.value === value)?.hint}</p>
+    </div>
+  );
+}
+
+function categorySubmitLabel(editing: boolean, type: TransactionType) {
+  if (editing) return 'Save Changes';
+  return type === 'expense' ? 'Add Category' : 'Add Source';
+}
+
+function CategoryFooter({
+  editing,
+  type,
+  saving,
+  canArchive,
+  onArchive,
+}: {
+  editing: boolean;
+  type: TransactionType;
+  saving: boolean;
+  canArchive: boolean;
+  onArchive: () => void;
+}) {
+  return (
+    <SheetFooter>
+      {editing && (
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-11"
+          onClick={onArchive}
+          disabled={saving || !canArchive}
+          title={canArchive ? undefined : 'Keep at least one'}
+        >
+          <Archive aria-hidden="true" /> Archive
+        </Button>
+      )}
+      <Button type="submit" className="press h-11 flex-1 text-base" disabled={saving}>
+        {saving && <Loader2 className="animate-spin" aria-hidden="true" />}
+        {categorySubmitLabel(editing, type)}
+      </Button>
+    </SheetFooter>
+  );
+}
+
 function CategoryForm({
   type,
   category,
@@ -287,33 +410,19 @@ function CategoryForm({
   async function onSubmit(e: SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     const trimmed = name.trim();
-    if (!trimmed) {
-      setError('Give it a name');
+    const problem = nameProblem(doc[type], trimmed, category?.id);
+    if (problem) {
+      setError(problem);
       document.getElementById(ids.name)?.focus();
       return;
     }
-    const clash = doc[type].some(
-      (c) => c.id !== category?.id && !c.archived && c.name.toLowerCase() === trimmed.toLowerCase(),
-    );
-    if (clash) {
-      setError('You already have one with this name. Pick a different name.');
-      document.getElementById(ids.name)?.focus();
-      return;
-    }
-    const taken = new Set([...doc.expense, ...doc.income].map((c) => c.id));
-    const item: Category = {
-      id: category?.id ?? slug(trimmed, taken),
-      name: trimmed.slice(0, 40),
-      color,
-      ...(type === 'expense' ? { group } : {}),
-    };
-    const list = category ? doc[type].map((c) => (c.id === category.id ? item : c)) : [...doc[type], item];
+    const { item, list } = upsertCategory(doc, type, category, { name: trimmed, color, group });
     try {
       await save.mutateAsync({ ...doc, [type]: list });
       toast.success(category ? `${item.name} updated` : `${item.name} added`);
       onDone();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Couldn’t save. Check your connection and try again.');
+      toast.error(errorMessage(err, 'Couldn’t save. Check your connection and try again.'));
     }
   }
 
@@ -331,7 +440,7 @@ function CategoryForm({
       toast.success(`${category.name} archived`);
       onDone();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Couldn’t archive. Check your connection and try again.');
+      toast.error(errorMessage(err, 'Couldn’t archive. Check your connection and try again.'));
     }
   }
 
@@ -361,57 +470,9 @@ function CategoryForm({
         )}
       </div>
 
-      <fieldset className="space-y-2">
-        <legend className="mb-2 text-sm font-medium">Colour</legend>
-        <div className="flex flex-wrap gap-2">
-          {CATEGORY_COLORS.map((c) => (
-            <label
-              key={c}
-              className="grid size-9 place-items-center rounded-full bg-(--c) ring-offset-2 ring-offset-background transition-transform hover:scale-110 has-[:checked]:ring-2 has-[:checked]:ring-foreground has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring"
-              style={{ '--c': c } as CSSProperties}
-            >
-              <input
-                type="radio"
-                name="colour"
-                value={c}
-                checked={color === c}
-                onChange={() => setColor(c)}
-                className="sr-only"
-                aria-label={c}
-              />
-              {color === c && <Check className={cn('size-4', inkOn(c))} aria-hidden="true" />}
-            </label>
-          ))}
-          <label
-            className="relative grid size-9 place-items-center rounded-full border border-dashed text-xs text-muted-foreground has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring"
-            title="Custom colour"
-          >
-            <span aria-hidden="true">+</span>
-            <input
-              id={ids.color}
-              type="color"
-              value={color}
-              onChange={(e) => setColor(e.target.value)}
-              className="absolute inset-0 opacity-0"
-              aria-label="Custom colour"
-            />
-          </label>
-        </div>
-      </fieldset>
+      <ColourField id={ids.color} value={color} onChange={setColor} />
 
-      {type === 'expense' && (
-        <div className="space-y-2">
-          <Label id={ids.group}>Budget group</Label>
-          <Segmented
-            fill
-            aria-label="Budget group"
-            value={group}
-            onValueChange={setGroup}
-            items={GROUPS.map((g) => ({ value: g.value, label: g.label }))}
-          />
-          <p className="text-xs text-muted-foreground">{GROUPS.find((g) => g.value === group)?.hint}</p>
-        </div>
-      )}
+      {type === 'expense' && <GroupField id={ids.group} value={group} onChange={setGroup} />}
 
       {category && (
         <Button asChild variant="outline" className="w-full">
@@ -420,24 +481,13 @@ function CategoryForm({
           </Link>
         </Button>
       )}
-      <SheetFooter>
-        {category && (
-          <Button
-            type="button"
-            variant="ghost"
-            className="h-11"
-            onClick={() => void onArchive()}
-            disabled={save.isPending || activeCount <= 1}
-            title={activeCount <= 1 ? 'Keep at least one' : undefined}
-          >
-            <Archive aria-hidden="true" /> Archive
-          </Button>
-        )}
-        <Button type="submit" className={cn('press h-11 flex-1 text-base')} disabled={save.isPending}>
-          {save.isPending && <Loader2 className="animate-spin" aria-hidden="true" />}
-          {category ? 'Save Changes' : type === 'expense' ? 'Add Category' : 'Add Source'}
-        </Button>
-      </SheetFooter>
+      <CategoryFooter
+        editing={Boolean(category)}
+        type={type}
+        saving={save.isPending}
+        canArchive={activeCount > 1}
+        onArchive={() => void onArchive()}
+      />
     </form>
   );
 }
