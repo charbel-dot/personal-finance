@@ -125,13 +125,25 @@ test('recurring: create, pause, resume and delete', async ({ page }) => {
   await expect(sheet.getByText('Give it a name')).toBeVisible();
   await sheet.getByLabel('Name').fill('Gym');
   await sheet.getByLabel(/Amount/).fill('39.90');
+  // Paid with Whish, to someone: the rule keeps both.
+  await sheet.getByRole('radio', { name: 'Whish Money' }).click();
+  await sheet.getByLabel(/Sent to/).fill('Coach');
   await sheet.getByRole('button', { name: 'Add Recurring Expense' }).click();
   await expect(page.getByText(/Gym added/)).toBeVisible();
+  await expect(page.getByText(/· to Coach/)).toBeVisible();
 
   await page.getByRole('button', { name: 'Actions for Gym' }).click();
   await page.getByRole('menuitem', { name: 'Pause' }).click();
   await expect(page.getByText('Gym paused')).toBeVisible();
   await expect(page.getByText('Paused', { exact: true })).toBeVisible();
+
+  // Pausing must not drop the Whish settings.
+  await page.getByRole('button', { name: 'Edit Gym' }).click();
+  const edit = page.getByRole('dialog', { name: 'Edit Recurring Expense' });
+  await expect(edit.getByRole('radio', { name: 'Whish Money' })).toBeChecked();
+  await expect(edit.getByLabel(/Sent to/)).toHaveValue('Coach');
+  await page.keyboard.press('Escape');
+  await expect(edit).toBeHidden();
 
   await page.getByRole('button', { name: 'Actions for Gym' }).click();
   await page.getByRole('menuitem', { name: 'Resume' }).click();
@@ -220,12 +232,21 @@ test('whish money: top up, send in LBP, pay, guard the balance and withdraw', as
   await pay.getByRole('button', { name: 'Add Expense' }).click();
   await expect(page.getByText('Expense added')).toBeVisible();
 
+  // Withdrawing moves the money back into Current Balance.
+  const balanceBefore = (await (await page.request.get('/api/balance')).json()) as { balance: number; whish: number };
   await page.getByRole('button', { name: 'Withdraw' }).click();
   const withdraw = page.getByRole('dialog', { name: 'Withdraw From Whish' });
   await withdraw.getByLabel('Amount').fill('5');
   await withdraw.getByRole('button', { name: 'Withdraw', exact: true }).click();
   await expect(page.getByText('Withdrew $5.00 from Whish')).toBeVisible();
   await expect(page.getByRole('button', { name: /^Withdrawn to cash \$5\.00/ }).first()).toBeVisible();
+  const balanceAfter = (await (await page.request.get('/api/balance')).json()) as { balance: number; whish: number };
+  expect(balanceAfter.balance - balanceBefore.balance).toBe(500);
+  expect(balanceAfter.whish - balanceBefore.whish).toBe(-500);
+
+  // LBP is written as the plain code, never L£ (Intl puts a non-breaking space after it).
+  await expect(page.getByText(/LBP\s[\d,]+/).first()).toBeVisible();
+  await expect(page.getByText(/L£/)).toHaveCount(0);
 });
 
 test('dashboard custom range and history filters', async ({ page }) => {

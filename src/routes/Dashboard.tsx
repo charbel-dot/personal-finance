@@ -19,7 +19,8 @@ import { analyzeBudget, type BudgetAnalysis, type Insight } from '../../shared/b
 import { addDays, daysBetween, isValidIsoDate } from '../../shared/dates';
 import { formatPercent } from '../../shared/money';
 import { upcoming } from '../../shared/recurring';
-import type { Transaction } from '../../shared/schema';
+import type { Balance, Transaction } from '../../shared/schema';
+import { WhishLogo } from '@/components/AccountFields';
 import { EmptyState, ErrorMessage, RowsSkeleton } from '@/components/Feedback';
 import { Page, PageHeader } from '@/components/Layout';
 import { Segmented } from '@/components/Segmented';
@@ -34,7 +35,7 @@ import { useCountUp } from '@/hooks/use-count-up';
 import { pick, useUrlState } from '@/hooks/use-url-state';
 import { formatDate, formatInDays, useMoney, useSecondMoney } from '@/lib/format';
 import { resolvePeriod, type Period, type PeriodKind } from '@/lib/period';
-import { useAppData, useBalance, useMe, useTransactions, useWhish } from '@/lib/queries';
+import { useAppData, useBalance, useMe, useTransactions } from '@/lib/queries';
 import { localToday } from '@/lib/today';
 import { cn } from '@/lib/utils';
 import { CategoryCard, PaceCard } from './DashboardCharts';
@@ -355,7 +356,7 @@ function BalanceCard({ label, range, analysis }: { label: string; range: Range; 
               <Skeleton className="h-12 w-56" />
             )}
           </div>
-          {balance.data && <BalanceExtras balance={balance.data.balance} />}
+          {balance.data && <BalanceExtras balance={balance.data} />}
         </div>
         <div className="grid grid-cols-3 gap-3 border-t pt-5">
           <Stat
@@ -382,24 +383,35 @@ function BalanceCard({ label, range, analysis }: { label: string; range: Range; 
   );
 }
 
-/** Under the balance: the same balance in the second currency, and how much of it sits in Whish. */
-function BalanceExtras({ balance }: { balance: number }) {
+/**
+ * Under the balance: the same amount in the second currency, then, once Whish is in use, what sits
+ * in the wallet and the total of both. Current Balance is money outside Whish.
+ */
+function BalanceExtras({ balance }: { balance: Balance }) {
   const second = useSecondMoney();
   const money = useMoney();
-  const whish = useWhish();
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground">
-      <span className="tabular">≈ {second(balance)}</span>
-      {whish.data && (whish.data.balance !== 0 || whish.data.transfers.length > 0) && (
-        <Link
-          to="/whish"
-          className="inline-flex min-h-8 items-center gap-1.5 rounded-full border px-2.5 outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
-        >
-          <img src="/whish-logo.png" alt="" width={16} height={16} className="size-4 rounded-[4px]" />
+      <span className="tabular">≈ {second(balance.balance)}</span>
+      {balance.whish !== 0 && (
+        <>
+          <Link
+            to="/whish"
+            aria-label={`Whish Money balance ${money(balance.whish)}. Open Whish Money`}
+            className="inline-flex min-h-8 items-center gap-1.5 rounded-full border px-2.5 outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            <WhishLogo />
+            <span>
+              Whish{' '}
+              <span className={cn('tabular font-medium', balance.whish < 0 ? 'text-destructive' : 'text-foreground')}>
+                {money(balance.whish)}
+              </span>
+            </span>
+          </Link>
           <span>
-            Whish <span className="tabular font-medium text-foreground">{money(whish.data.balance)}</span>
+            Total <span className="tabular font-medium text-foreground">{money(balance.balance + balance.whish)}</span>
           </span>
-        </Link>
+        </>
       )}
     </div>
   );
@@ -744,6 +756,7 @@ function UpcomingCard({ today }: { today: string }) {
                     <div className="min-w-0 flex-1">
                       <p className="flex items-center gap-2 truncate font-medium">
                         {rule.name}
+                        {rule.account === 'whish' && <WhishLogo size={14} label="Paid with Whish Money" />}
                         {soon && (
                           <span className="inline-flex items-center gap-1 rounded-full bg-expense-soft px-1.5 py-0.5 text-[11px] font-medium text-expense">
                             <span className="size-1.5 animate-pulse rounded-full bg-expense" aria-hidden="true" />

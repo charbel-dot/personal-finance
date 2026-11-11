@@ -22,7 +22,7 @@ export function CurrencySwitch({
           aria-pressed={value === c}
           onClick={() => onChange(c)}
           className={cn(
-            'min-h-8 rounded-md px-2.5 text-xs font-semibold transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+            'min-h-9 min-w-11 rounded-md px-2.5 text-xs font-semibold transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
             value === c ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
           )}
         >
@@ -33,7 +33,7 @@ export function CurrencySwitch({
   );
 }
 
-/** "≈ L£150,000" for the typed amount in the other currency, or the rate when nothing is typed. */
+/** "≈ LBP 150,000" for the typed amount in the other currency, or the rate when nothing is typed. */
 export function ConversionHint({ value, currency, id }: { value: string; currency: Currency; id?: string }) {
   const { rate } = useCurrency();
   const cents = parseAmountIn(value.replace(/-/g, ''), currency);
@@ -44,7 +44,7 @@ export function ConversionHint({ value, currency, id }: { value: string; currenc
     text = `≈ ${formatMoney(other === 'LBP' ? roundLbp(converted) : converted, other)} · ${text}`;
   }
   return (
-    <p id={id} className="tabular text-xs text-muted-foreground" aria-live="polite">
+    <p id={id} className="tabular text-xs text-muted-foreground">
       {text}
     </p>
   );
@@ -55,6 +55,7 @@ interface MoneyInputProps {
   field: MoneyFieldState;
   name: string;
   error?: string;
+  /** Id of the element showing `error`; defaults to `${id}-error`. */
   errorId?: string;
   hintId: string;
   className?: string;
@@ -97,7 +98,7 @@ export function MoneyInput({
           value={field.value}
           maxLength={20}
           aria-invalid={Boolean(error)}
-          aria-describedby={[error ? errorId : undefined, hintId].filter(Boolean).join(' ')}
+          aria-describedby={[error ? (errorId ?? `${id}-error`) : undefined, hintId].filter(Boolean).join(' ')}
           onChange={(e) => field.setValue(e.target.value.replace(allowNegative ? /[^\d.,-]/g : /[^\d.,]/g, ''))}
           onBlur={onBlur}
           onKeyDown={(e) => {

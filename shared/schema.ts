@@ -43,6 +43,9 @@ export const ACCOUNTS = ['cash', 'whish'] as const;
 export const account = z.enum(ACCOUNTS);
 export type Account = z.infer<typeof account>;
 
+/** Who money was sent to: a name or phone number. Blank means nobody. */
+const recipient = z.string().trim().max(60, 'Name is too long');
+
 export const transactionInput = z.object({
   type: transactionType,
   amount: amountCents,
@@ -52,7 +55,7 @@ export const transactionInput = z.object({
   /** Added in 1.6.0; absent means cash. */
   account: account.optional(),
   /** Who the money was sent to (Whish sends). */
-  to: z.string().trim().max(60, 'Name is too long').optional(),
+  to: recipient.optional(),
 });
 export type TransactionInput = z.infer<typeof transactionInput>;
 
@@ -112,6 +115,10 @@ export const recurringInput = z.object({
   startDate: isoDate,
   note,
   paused: z.boolean().default(false),
+  /** Added in 1.7.0; absent means cash. Generated transactions inherit it. */
+  account: account.optional(),
+  /** Who a recurring Whish send goes to. */
+  to: recipient.optional(),
 });
 export type RecurringInput = z.infer<typeof recurringInput>;
 
@@ -322,7 +329,10 @@ export interface Bootstrap {
 }
 
 export interface Balance {
+  /** Money outside Whish (cash and bank): opening + income − expenses − Whish balance. */
   balance: number;
+  /** Money in the Whish wallet. */
+  whish: number;
   income: number;
   expenses: number;
 }

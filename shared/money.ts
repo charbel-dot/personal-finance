@@ -35,6 +35,8 @@ export function formatMoney(
       fmt = new Intl.NumberFormat(undefined, {
         style: 'currency',
         currency,
+        // LBP is always written as the code ("LBP 150,000"), never L£ or ل.ل.; USD as a plain $.
+        currencyDisplay: currency === 'LBP' ? 'code' : 'narrowSymbol',
         notation: options.compact ? 'compact' : 'standard',
         maximumFractionDigits: options.compact ? 1 : currency === 'LBP' ? 0 : 2,
         signDisplay: options.signed ? 'exceptZero' : 'auto',

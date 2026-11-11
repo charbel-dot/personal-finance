@@ -53,9 +53,12 @@ Browser ──► Cloudflare Pages ── static SPA (dist/)
   base currency and converted for display; converted LBP is rounded to the nearest 1,000.
 - **Whish Money**: a wallet page with your Whish balance. Top up from cash, withdraw back to cash,
   send (with who it went to) or pay with Whish. Sends and payments are normal expenses marked as paid
-  with Whish, so they still count in budgets; top-ups and withdrawals just move money between cash and
-  Whish. Any transaction can be marked as paid with or received in Whish, and the server never lets the
-  Whish balance go below zero.
+  with Whish, so they still count in budgets. Current Balance is the money you hold outside Whish:
+  topping up moves money out of it into Whish, withdrawing puts it back, and the dashboard shows the
+  Whish balance and the total of both. Any transaction or recurring entry can be paid with or received
+  in Whish. The server refuses anything you do by hand that would overdraw the wallet; a recurring Whish
+  payment still runs when the wallet is short, and the Whish page then flags the negative balance.
+  LBP is always written as the plain code ("LBP 150,000"), never L£.
 - **Everything is a link**: dashboard figures, tips, budget buckets, chart cards, upcoming bills and
   account stats open the filtered History, Savings, Recurring or Categories page they describe.
 - **Liquid glass UI**: buttons, inputs, switches, segmented controls, menus and the phone tab bar use

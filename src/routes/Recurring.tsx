@@ -4,10 +4,18 @@ import { useId, useState, type CSSProperties, type ReactNode, type SyntheticEven
 import { useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import { isValidIsoDate } from '../../shared/dates';
+import { AccountSwitch, RecipientField, WhishLogo } from '@/components/AccountFields';
 import { MoneyInput } from '@/components/MoneyField';
 import { useMoneyField } from '@/hooks/use-money-field';
 import { monthlyEquivalent, nextDueDate } from '../../shared/recurring';
-import type { Category, Frequency, Recurring as Rule, RecurringInput, TransactionType } from '../../shared/schema';
+import type {
+  Account,
+  Category,
+  Frequency,
+  Recurring as Rule,
+  RecurringInput,
+  TransactionType,
+} from '../../shared/schema';
 import { CategoryPicker } from '@/components/CategoryPicker';
 import { EmptyState } from '@/components/Feedback';
 import { Page, PageHeader } from '@/components/Layout';
@@ -37,6 +45,8 @@ function toInput(rule: Rule, patch: Partial<RecurringInput> = {}): RecurringInpu
     startDate: rule.startDate,
     note: rule.note,
     paused: rule.paused,
+    account: rule.account,
+    to: rule.to,
     ...patch,
   };
 }
@@ -205,8 +215,13 @@ function RuleRow({ rule, color, today, onEdit }: { rule: Rule; color?: string; t
           {rule.paused && <Badge variant="secondary">Paused</Badge>}
         </span>
         <span className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-          <CalendarClock className="size-3.5 shrink-0" aria-hidden="true" />
+          {rule.account === 'whish' ? (
+            <WhishLogo size={14} label="Whish Money" />
+          ) : (
+            <CalendarClock className="size-3.5 shrink-0" aria-hidden="true" />
+          )}
           {FREQ_LABEL[rule.frequency]}
+          {rule.to && ` · to ${rule.to}`}
           {!rule.paused && ` · next ${formatDate(nextDueDate(rule, today), today)}`}
         </span>
       </button>
@@ -267,7 +282,15 @@ function focusFirstError(errors: Record<string, string>, ids: { name: string; am
 function RecurringForm({ rule, onDone }: { rule?: Rule; onDone: () => void }) {
   const { categories } = useAppData();
   const save = useSaveRecurring();
-  const ids = { name: useId(), amount: useId(), amountHint: useId(), freq: useId(), start: useId(), note: useId() };
+  const ids = {
+    name: useId(),
+    amount: useId(),
+    amountHint: useId(),
+    freq: useId(),
+    start: useId(),
+    note: useId(),
+    to: useId(),
+  };
   const [type, setType] = useState<TransactionType>(rule?.type ?? 'expense');
   const cats = (t: TransactionType) => categories[t].filter((c) => !c.archived || c.id === rule?.categoryId);
 
@@ -281,7 +304,10 @@ function RecurringForm({ rule, onDone }: { rule?: Rule; onDone: () => void }) {
   const [frequency, setFrequency] = useState<Frequency>(rule?.frequency ?? 'monthly');
   const [startDate, setStartDate] = useState(rule?.startDate ?? localToday());
   const [note, setNote] = useState(rule?.note ?? '');
+  const [account, setAccount] = useState<Account>(rule?.account ?? 'cash');
+  const [to, setTo] = useState(rule?.to ?? '');
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const whish = account === 'whish';
 
   async function onSubmit(e: SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -304,6 +330,8 @@ function RecurringForm({ rule, onDone }: { rule?: Rule; onDone: () => void }) {
           startDate,
           note: note.trim() || undefined,
           paused: rule?.paused ?? false,
+          account: whish ? 'whish' : undefined,
+          to: whish && type === 'expense' ? to.trim() || undefined : undefined,
         },
       });
       toast.success(rule ? `${name.trim()} updated` : `${name.trim()} added. It logs itself on every due date.`);
@@ -356,6 +384,8 @@ function RecurringForm({ rule, onDone }: { rule?: Rule; onDone: () => void }) {
         onChange={(id) => setCategoryByType((prev) => ({ ...prev, [type]: id }))}
         error={errors.categoryId}
       />
+      <AccountSwitch type={type} value={account} onChange={setAccount} />
+      {whish && type === 'expense' && <RecipientField id={ids.to} value={to} onChange={setTo} />}
       <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
         <Field id={ids.start} label="Start date" error={errors.startDate}>
           <Input
@@ -405,7 +435,11 @@ function Field({ id, label, error, children }: { id: string; label: string; erro
     <div className="space-y-2">
       <Label htmlFor={id}>{label}</Label>
       {children}
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && (
+        <p id={`${id}-error`} className="text-sm text-destructive">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

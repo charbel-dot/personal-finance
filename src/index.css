@@ -42,6 +42,8 @@
   --color-expense: var(--expense);
   --color-expense-soft: var(--expense-soft);
   --color-brand: var(--brand);
+  /* Whish Money brand red (from whish.money), the same in both themes. White icons on it pass 3:1. */
+  --color-whish: #ff0a46;
   --color-brand-fg: var(--brand-fg);
   --color-brand-ink: oklch(0.2 0.02 85);
   --color-warning: var(--warning);

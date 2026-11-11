@@ -73,7 +73,9 @@ export function formatRate(rate: number): string {
   return `1 USD = ${rateFmt.format(rate)} LBP`;
 }
 
+/** Prefix for an amount field: "$" for USD, the plain code "LBP" for Lebanese pounds. */
 export function currencySymbol(currency: string): string {
+  if (currency === 'LBP') return 'LBP';
   try {
     const part = new Intl.NumberFormat(undefined, { style: 'currency', currency, currencyDisplay: 'narrowSymbol' })
       .formatToParts(0)

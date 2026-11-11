@@ -12,11 +12,14 @@ import { Label } from '@/components/ui/label';
 import { Segmented } from '@/components/Segmented';
 import { useMoneyField } from '@/hooks/use-money-field';
 import { useSignOut } from '@/hooks/use-sign-out';
-import { currencySymbol, formatRate, useCurrency } from '@/lib/format';
+import { formatRate, useCurrency } from '@/lib/format';
 import { useAppData, usePatchSettings } from '@/lib/queries';
 import { useTheme, type ThemePref } from '@/lib/theme';
 
 const rateFmt = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
+
+/** Lebanese pounds are always written as the plain code "LBP". */
+const CURRENCY_LABEL: Record<Currency, string> = { USD: 'USD · $', LBP: 'LBP' };
 
 const THEMES: { value: ThemePref; label: string; icon: typeof Sun }[] = [
   { value: 'system', label: 'System', icon: Monitor },
@@ -138,7 +141,7 @@ export default function Settings() {
                 aria-label="Main currency"
                 value={display}
                 onValueChange={(v) => void update({ displayCurrency: v }, `Main currency set to ${v}`)}
-                items={CURRENCIES.map((c) => ({ value: c, label: `${c} · ${currencySymbol(c)}` }))}
+                items={CURRENCIES.map((c) => ({ value: c, label: CURRENCY_LABEL[c] }))}
               />
             </Row>
             <Row

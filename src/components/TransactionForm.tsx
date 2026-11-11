@@ -3,6 +3,7 @@ import { useId, useRef, useState, type SyntheticEvent } from 'react';
 import { toast } from 'sonner';
 import { isValidIsoDate } from '../../shared/dates';
 import type { Account, Category, Settings, Transaction, TransactionType } from '../../shared/schema';
+import { AccountSwitch, RecipientField } from './AccountFields';
 import { CategoryPicker } from './CategoryPicker';
 import { ConversionHint, CurrencySwitch } from './MoneyField';
 import { SheetFooter } from './ResponsiveSheet';
@@ -216,27 +217,6 @@ function submitLabel(editing: boolean, type: TransactionType) {
   return type === 'income' ? 'Add Income' : 'Add Expense';
 }
 
-/** Who a Whish send went to. */
-function RecipientField({ id, value, onChange }: { id: string; value: string; onChange: (value: string) => void }) {
-  return (
-    <div className="space-y-2">
-      <Label htmlFor={id}>
-        Sent to <span className="font-normal text-muted-foreground">(optional)</span>
-      </Label>
-      <Input
-        id={id}
-        name="to"
-        maxLength={60}
-        autoComplete="off"
-        placeholder="Name or phone number…"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="h-11"
-      />
-    </div>
-  );
-}
-
 /** Form values to start from: the transaction being edited, else a fresh one. */
 function startValues(editing: Transaction | undefined, type: TransactionType, account: Account | undefined) {
   return {
@@ -324,39 +304,6 @@ export function TypeSwitch({ value, onChange }: { value: TransactionType; onChan
         ),
       }))}
     />
-  );
-}
-
-const ACCOUNT_ITEMS = [
-  { value: 'cash', label: 'Cash' },
-  {
-    value: 'whish',
-    label: (
-      <span className="flex items-center gap-1.5">
-        <img src="/whish-logo.png" alt="" width={16} height={16} className="size-4 rounded-[4px]" />
-        Whish Money
-      </span>
-    ),
-  },
-] as const;
-
-function AccountSwitch({
-  type,
-  value,
-  onChange,
-}: {
-  type: TransactionType;
-  value: Account;
-  onChange: (account: Account) => void;
-}) {
-  const label = type === 'income' ? 'Received in' : 'Paid with';
-  return (
-    <div className="space-y-2">
-      <p className="text-sm font-medium" aria-hidden="true">
-        {label}
-      </p>
-      <Segmented fill aria-label={label} value={value} onValueChange={onChange} items={[...ACCOUNT_ITEMS]} />
-    </div>
   );
 }
 

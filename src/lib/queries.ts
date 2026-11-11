@@ -195,16 +195,23 @@ export function useWhish() {
   return useQuery({ queryKey: keys.whish, queryFn: api.whish, staleTime: 30_000 });
 }
 
-export function useSaveWhish() {
+/** Whish transfers move money between the wallet and Current Balance, so both refresh. */
+function useInvalidateWhish() {
   const qc = useQueryClient();
+  return () =>
+    Promise.all([qc.invalidateQueries({ queryKey: keys.whish }), qc.invalidateQueries({ queryKey: keys.balance })]);
+}
+
+export function useSaveWhish() {
+  const invalidate = useInvalidateWhish();
   return useMutation({
     mutationFn: ({ id, input }: { id?: string; input: WhishInput }) =>
       id ? api.updateWhish(id, input) : api.createWhish(input),
-    onSettled: () => qc.invalidateQueries({ queryKey: keys.whish }),
+    onSettled: invalidate,
   });
 }
 
 export function useDeleteWhish() {
-  const qc = useQueryClient();
-  return useMutation({ mutationFn: api.deleteWhish, onSettled: () => qc.invalidateQueries({ queryKey: keys.whish }) });
+  const invalidate = useInvalidateWhish();
+  return useMutation({ mutationFn: api.deleteWhish, onSettled: invalidate });
 }

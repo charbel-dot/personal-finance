@@ -69,6 +69,11 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [],
         cleanupOutdatedCaches: true,
+        // A new release takes over as soon as it installs, without waiting for every tab to close or
+        // for the (possibly old) page to ask. Otherwise an installed PWA can sit on a stale build:
+        // the new worker installs, then waits forever behind the old one.
+        skipWaiting: true,
+        clientsClaim: true,
       },
     }),
   ],

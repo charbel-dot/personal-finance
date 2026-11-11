@@ -72,8 +72,20 @@ export default function Whish() {
             <div aria-live="polite">
               {whish.data ? (
                 <>
-                  <p className="tabular text-4xl font-bold tracking-tight sm:text-5xl">{money(balance)}</p>
+                  <p
+                    className={cn(
+                      'tabular text-4xl font-bold tracking-tight sm:text-5xl',
+                      balance < 0 && 'text-destructive',
+                    )}
+                  >
+                    {money(balance)}
+                  </p>
                   <p className="tabular mt-1 text-sm text-muted-foreground">≈ {second(balance)}</p>
+                  {balance < 0 && (
+                    <p className="mt-3 text-sm text-destructive" role="status">
+                      A recurring Whish payment ran without enough money in the wallet. Top up to cover it.
+                    </p>
+                  )}
                 </>
               ) : whish.isError ? null : (
                 <Skeleton className="h-12 w-56" />
@@ -87,7 +99,7 @@ export default function Whish() {
                   onClick={onClick}
                   className="press flex min-h-20 flex-col items-center justify-center gap-2 rounded-2xl border bg-muted/40 px-1 text-xs font-medium transition-colors outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 sm:text-sm"
                 >
-                  <span className="grid size-9 place-items-center rounded-full bg-[#ff0a46] text-white">
+                  <span className="grid size-9 place-items-center rounded-full bg-whish text-white">
                     <Icon className="size-4" aria-hidden="true" />
                   </span>
                   {label}
@@ -299,7 +311,7 @@ function TransferForm({
         <Label htmlFor={ids.amount}>Amount</Label>
         <MoneyInput id={ids.amount} hintId={ids.amountHint} name="amount" field={amount} error={errors.amount} />
         {errors.amount ? (
-          <p className="text-sm text-destructive" role="alert">
+          <p id={`${ids.amount}-error`} className="text-sm text-destructive" role="alert">
             {errors.amount}
           </p>
         ) : (

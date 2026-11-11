@@ -209,6 +209,8 @@ export async function updateTransaction(
 }
 
 export async function deleteTransaction(bucket: R2Bucket, id: string, month: string): Promise<void> {
+  const target = (await readJson(bucket, KEYS.month(month), monthFile, emptyMonth)).data.items.find((t) => t.id === id);
+  if (target?.account === 'whish' && target.type === 'income') await assertWhishBalance(bucket, {}, id);
   const { changed } = await updateJson(bucket, KEYS.month(month), monthFile, emptyMonth, (current) =>
     current.items.some((t) => t.id === id)
       ? { next: { items: current.items.filter((t) => t.id !== id) }, result: undefined }
@@ -217,15 +219,25 @@ export async function deleteTransaction(bucket: R2Bucket, id: string, month: str
   if (!changed) throw new NotFoundError('Transaction');
 }
 
+/**
+ * All-time totals. `balance` is the money you hold outside Whish: opening balance + income − expenses,
+ * minus what sits in the Whish wallet. Topping Whish up moves money out of it; withdrawing from Whish
+ * moves it back in. `whish` is the wallet's own balance, so balance + whish is everything you have.
+ */
 export async function getBalance(bucket: R2Bucket): Promise<Balance> {
-  const [items, settings] = await Promise.all([listTransactions(bucket), getSettings(bucket)]);
+  const [items, settings, whishDocument] = await Promise.all([
+    listTransactions(bucket),
+    getSettings(bucket),
+    readWhish(bucket),
+  ]);
   let income = 0;
   let expenses = 0;
   for (const t of items) {
     if (t.type === 'income') income += t.amount;
     else expenses += t.amount;
   }
-  return { income, expenses, balance: settings.openingBalance + income - expenses };
+  const whish = whishBalance(whishDocument.items, items);
+  return { income, expenses, whish, balance: settings.openingBalance + income - expenses - whish };
 }
 
 /* ---------------------------------------------------------------------------- recurring */
@@ -281,7 +293,14 @@ export async function updateRecurring(bucket: R2Bucket, id: string, input: Recur
       const yesterday = addDays(today, -1);
       cursor = cursor && cursor > yesterday ? cursor : yesterday;
     }
-    const updated: Recurring = { ...existing, ...input, note: input.note, updatedAt: nowIso() };
+    const updated: Recurring = {
+      ...existing,
+      ...input,
+      note: input.note,
+      account: input.account,
+      to: input.to,
+      updatedAt: nowIso(),
+    };
     if (cursor) updated.lastGeneratedDate = cursor;
     else delete updated.lastGeneratedDate;
     return { next: { items: current.items.map((r) => (r.id === id ? updated : r)) }, result: updated };
@@ -463,8 +482,10 @@ export async function getWhish(bucket: R2Bucket): Promise<WhishSummary> {
 }
 
 /**
- * A Whish wallet can't go below zero. Checked against the balance with this change applied
- * (and the edited transaction or transfer left out).
+ * A Whish wallet can't be overdrawn by hand. Recurring Whish payments are generated on schedule and
+ * may still take it below zero (that is what happened), so a change is refused only when it would
+ * leave the balance negative *and* lower than it is now: topping up or reducing a payment is always
+ * allowed, even while the wallet is short.
  */
 async function assertWhishBalance(
   bucket: R2Bucket,
@@ -472,19 +493,19 @@ async function assertWhishBalance(
   exclude?: string,
 ) {
   const [doc, all] = await Promise.all([readWhish(bucket), listTransactions(bucket)]);
+  const before = whishBalance(doc.items, all);
   const transfers = [...doc.items.filter((e) => e.id !== exclude), ...(change.transfer ? [change.transfer] : [])];
   const transactions = [...all.filter((t) => t.id !== exclude), ...(change.transaction ? [change.transaction] : [])];
-  if (whishBalance(transfers, transactions) < 0) {
+  const after = whishBalance(transfers, transactions);
+  if (after < 0 && after < before) {
     throw new ValidationError('Not enough money in your Whish account. Top it up first.');
   }
 }
 
-/** Only Whish expenses (and edits that take money out of Whish) can overdraw the wallet. */
+/** Checks a new or edited transaction against the Whish balance when Whish is involved at all. */
 async function assertWhishCovers(bucket: R2Bucket, input: TransactionInput, editingId?: string) {
   if (editingId) {
-    // Editing anything that was or becomes a Whish entry changes the balance either way.
-    const all = await listTransactions(bucket);
-    const before = all.find((t) => t.id === editingId);
+    const before = (await listTransactions(bucket)).find((t) => t.id === editingId);
     if (input.account !== 'whish' && before?.account !== 'whish') return;
   } else if (input.account !== 'whish' || input.type !== 'expense') {
     return;

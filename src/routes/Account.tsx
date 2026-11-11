@@ -23,7 +23,7 @@ import { useCountUp } from '@/hooks/use-count-up';
 import { useSignOut } from '@/hooks/use-sign-out';
 import { useMoney } from '@/lib/format';
 import { APP_VERSION } from '@/lib/pwa';
-import { useAppData, useBalance, useMe, useSavings, useTransactions } from '@/lib/queries';
+import { useAppData, useBalance, useMe, useSavings, useTransactions, useWhish } from '@/lib/queries';
 
 const longDate = new Intl.DateTimeFormat(undefined, {
   day: 'numeric',
@@ -231,6 +231,7 @@ function DataCard() {
   const money = useMoney();
   const all = useTransactions(null);
   const savings = useSavings();
+  const whish = useWhish();
   const balance = useBalance();
   const items = useMemo(() => all.data ?? [], [all.data]);
   const months = new Set(items.map((t) => t.date.slice(0, 7))).size;
@@ -239,7 +240,7 @@ function DataCard() {
   function exportCsv(list: Transaction[]) {
     const byId = new Map([...categories.expense, ...categories.income].map((c) => [c.id, c.name]));
     const rows = [
-      ['date', 'type', 'category', `amount (${settings.currency})`, 'note', 'recurring'],
+      ['date', 'type', 'category', `amount (${settings.currency})`, 'note', 'recurring', 'account', 'sent to'],
       ...list.map((t) => [
         t.date,
         t.type,
@@ -247,6 +248,8 @@ function DataCard() {
         (t.amount / 100).toFixed(2),
         t.note ?? '',
         t.recurringId ? 'yes' : '',
+        t.account === 'whish' ? 'Whish Money' : 'Cash',
+        t.to ?? '',
       ]),
     ];
     download(
@@ -265,6 +268,7 @@ function DataCard() {
       recurring,
       transactions: list,
       savings: savings.data ?? { items: [], goals: [] },
+      whish: { transfers: whish.data?.transfers ?? [] },
     };
     download(`money-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(data, null, 2), 'application/json');
     toast.success('Backup downloaded');
@@ -310,7 +314,11 @@ function DataCard() {
           <Button variant="outline" disabled={!all.data} onClick={() => exportCsv(items)}>
             <Download aria-hidden="true" /> Export CSV
           </Button>
-          <Button variant="outline" disabled={!all.data || !savings.data} onClick={() => exportJson(items)}>
+          <Button
+            variant="outline"
+            disabled={!all.data || !savings.data || !whish.data}
+            onClick={() => exportJson(items)}
+          >
             <FileJson aria-hidden="true" /> Download Backup (JSON)
           </Button>
         </div>
