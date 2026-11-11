@@ -204,6 +204,42 @@ export const loginInput = z.object({
 });
 export type LoginInput = z.infer<typeof loginInput>;
 
+/* ---------------------------------------------------------------------------- users */
+
+export const username = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .min(3, 'Usernames need at least 3 characters')
+  .max(32, 'Usernames can be at most 32 characters')
+  .regex(/^[a-z0-9._-]+$/, 'Use letters, numbers, dots, dashes or underscores');
+
+export const newPassword = z
+  .string()
+  .min(8, 'Passwords need at least 8 characters')
+  .max(200, 'Passwords can be at most 200 characters');
+
+export const newUserInput = z.object({ username, password: newPassword });
+export type NewUserInput = z.infer<typeof newUserInput>;
+
+export const passwordReset = z.object({ password: newPassword });
+export type PasswordReset = z.infer<typeof passwordReset>;
+
+export const passwordChange = z.object({
+  current: z.string().min(1, 'Enter your current password').max(200),
+  next: newPassword,
+});
+export type PasswordChange = z.infer<typeof passwordChange>;
+
+export type Role = 'owner' | 'member';
+
+/** A user as the owner's People list shows it (never includes the password hash). */
+export interface UserSummary {
+  id: string;
+  username: string;
+  createdAt: string;
+}
+
 export const rangeQuery = z
   .object({ from: isoDate, to: isoDate })
   .refine((q) => q.from <= q.to, { message: '"from" must be before "to"' });

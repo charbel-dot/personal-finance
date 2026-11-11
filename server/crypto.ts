@@ -31,6 +31,13 @@ export async function pbkdf2(password: string, salt: Uint8Array<ArrayBuffer>, it
   return new Uint8Array(bits);
 }
 
+/** Hashes a password into the format `verifyPassword` reads (same as `npm run hash-password`). */
+export async function hashPassword(password: string): Promise<string> {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const hash = await pbkdf2(password, salt, PBKDF2_MAX_ITERATIONS);
+  return `pbkdf2_sha256:${PBKDF2_MAX_ITERATIONS}:${base64UrlEncode(salt)}:${base64UrlEncode(hash)}`;
+}
+
 /** Verifies `password` against `pbkdf2_sha256:<iterations>:<saltB64url>:<hashB64url>`. */
 export async function verifyPassword(password: string, stored: string): Promise<boolean> {
   const parts = stored.trim().split(':');

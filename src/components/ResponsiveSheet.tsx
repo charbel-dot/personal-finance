@@ -135,7 +135,7 @@ function PhoneSheet({ open, onClose, title, description, children }: Props) {
       }}
     >
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/45 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[var(--scrim)] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
         <div className="pointer-events-none fixed inset-x-0 z-50 flex flex-col justify-end" style={frame}>
           <DialogPrimitive.Content
             // No auto-focus into a field on phones: the keyboard would pop up mid-animation.

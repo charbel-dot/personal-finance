@@ -1,16 +1,18 @@
 import { expect, test, type Page } from '@playwright/test';
 import { E2E_PASSWORD, E2E_USER } from '../playwright.config';
 
-async function login(page: Page, password = E2E_PASSWORD, { tour = false } = {}) {
+const welcome = (page: Page) => page.getByRole('dialog', { name: 'Welcome to Money' });
+
+async function login(page: Page, password = E2E_PASSWORD, { tour = false, username = E2E_USER } = {}) {
   // The first-run walkthrough opens once per account; tests not about it skip it whenever it shows.
   if (!tour) {
-    await page.addLocatorHandler(page.getByRole('dialog', { name: 'Welcome to Money' }), async (d) => {
+    await page.addLocatorHandler(welcome(page), async (d) => {
       await d.getByRole('button', { name: 'Skip' }).click();
     });
   }
   await page.goto('/');
   await expect(page).toHaveURL(/\/login$/);
-  await page.getByLabel('Username').fill(E2E_USER);
+  await page.getByLabel('Username').fill(username);
   await page.getByLabel('Password', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Sign In' }).click();
 }
@@ -298,4 +300,71 @@ test('dashboard cards link to where they belong', async ({ page }) => {
     .last()
     .click();
   await expect(page).toHaveURL(/\/recurring$/);
+});
+
+async function signOut(page: Page) {
+  await page.getByRole('link', { name: 'Settings' }).click();
+  await page.getByRole('button', { name: 'Sign Out' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Sign Out' }).click();
+  await expect(page).toHaveURL(/\/login$/);
+}
+
+test('users: the owner adds a user who only sees their own data, then removes them', async ({ page }) => {
+  // Three sign-ins, each running the deliberately slow password hash.
+  test.slow();
+  // Owner adds "sam" from Account → People.
+  await login(page);
+  await page.getByRole('link', { name: 'Account' }).click();
+  await page.getByRole('button', { name: 'Add User' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Add User' });
+  await sheet.getByLabel('Username').fill('Sam');
+  await sheet.getByLabel('Password', { exact: true }).fill('short');
+  await sheet.getByRole('button', { name: 'Create User' }).click();
+  await expect(sheet.getByRole('alert')).toContainText('at least 8 characters');
+  await sheet.getByLabel('Password', { exact: true }).fill('sam-password-1');
+  await sheet.getByRole('button', { name: 'Create User' }).click();
+  await expect(page.getByText('sam can now sign in')).toBeVisible();
+  await expect(page.getByText('sam', { exact: true })).toBeVisible();
+  await signOut(page);
+
+  // Sam starts empty (none of the owner's transactions), gets the walkthrough, and adds their own.
+  await page.removeLocatorHandler(welcome(page));
+  await login(page, 'sam-password-1', { username: 'sam', tour: true });
+  await expect(page.getByRole('dialog')).toHaveAccessibleName('Welcome to Money');
+  await page.getByRole('dialog').getByRole('button', { name: 'Skip' }).click();
+  await expect(page.getByRole('heading', { name: /^Good .*, Sam$/ })).toBeVisible();
+  await page.getByRole('link', { name: 'History' }).click();
+  await page.getByLabel('Search transactions').fill('lunch');
+  await expect(page.getByRole('button', { name: /Team lunch/ })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Add Transaction' }).click();
+  const tx = page.getByRole('dialog', { name: 'New Transaction' });
+  await tx.getByLabel('Amount').fill('7.25');
+  await tx.getByLabel(/Note/).fill('Sam coffee');
+  await tx.getByRole('button', { name: 'Add Expense' }).click();
+  await expect(page.getByText('Expense added')).toBeVisible();
+  // Members manage their own password; they can't manage people.
+  await page.getByRole('link', { name: 'Account' }).click();
+  await expect(page.getByRole('heading', { name: 'Change Password' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Add User' })).toHaveCount(0);
+  expect((await page.request.get('/api/users')).status()).toBe(403);
+  await signOut(page);
+
+  // The owner never sees Sam's data, then removes Sam (and everything Sam stored).
+  await login(page);
+  await page.getByRole('link', { name: 'History' }).click();
+  await page.getByLabel('Search transactions').fill('coffee');
+  await expect(page.getByRole('button', { name: /Sam coffee/ })).toHaveCount(0);
+  await page.getByRole('link', { name: 'Account' }).click();
+  await page.getByRole('button', { name: 'Remove sam' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Remove User' }).click();
+  await expect(page.getByText('sam removed')).toBeVisible();
+  await signOut(page);
+
+  // Sam's account is gone: the old password no longer signs in.
+  await page.goto('/login');
+  await expect(page.getByRole('heading', { name: 'Welcome Back' })).toBeVisible();
+  await page.getByLabel('Username').fill('sam');
+  await page.getByLabel('Password', { exact: true }).fill('sam-password-1');
+  await page.getByLabel('Password', { exact: true }).press('Enter');
+  await expect(page.getByRole('alert')).toContainText('Incorrect username or password');
 });

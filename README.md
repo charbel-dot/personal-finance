@@ -95,6 +95,11 @@ public/             _headers (CSP and security headers), icons, theme-init.js
 | `settings.json`                | currency, timezone, opening balance, last-used categories                 |
 | `savings.json`                 | `{ items: SavingsEntry[], goals: SavingsGoal[] }` by source and goal      |
 | `security/login-attempts.json` | rate-limit counters (hashed client keys)                                  |
+| `auth/users.json`              | other users: id, username, PBKDF2 password hash, created date             |
+| `users/<id>/…`                 | each other user's own copy of every file above (transactions, settings…)  |
+
+The owner's files sit at the root; every other user's sit under `users/<id>/`. Requests are scoped to
+the signed-in user's folder on the server, so one user can never read or write another's data.
 
 Amounts are stored as integer cents. Every write is a read-modify-write that uses a conditional put
 (`onlyIf: { etagMatches }`, or `etagDoesNotMatch: '*'` when creating), with retries, so concurrent
@@ -240,7 +245,18 @@ Without them, the deploy job is skipped.
 Add it under Pages → Custom domains. The API stays on the same origin automatically, so cookies are
 first-party and no CORS is needed.
 
+## Users
+
+The account in the `AUTH_USERNAME` / `AUTH_PASSWORD_HASH` secrets is the **owner**. The owner adds
+people from **Account → People → Add User** (username and an initial password, at least 8
+characters). Each user signs in with their own credentials, starts with an empty account and the
+first-run walkthrough, and only ever sees their own data. The owner can reset a user's password
+(signs them out everywhere) or remove a user, which permanently deletes everything they stored.
+Users change their own password from their Account page. There is no public sign-up.
+
 ## Changing the password
+
+This is the owner's password; other users change theirs in the app.
 
 ```bash
 npm run hash-password

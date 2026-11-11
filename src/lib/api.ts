@@ -3,6 +3,10 @@ import type {
   Bootstrap,
   CategoriesDoc,
   LoginInput,
+  NewUserInput,
+  PasswordChange,
+  Role,
+  UserSummary,
   Recurring,
   RecurringInput,
   GoalInput,
@@ -65,7 +69,14 @@ export const api = {
   logout: () => request<{ ok: true }>('POST', '/auth/logout', {}),
   me: () =>
     request<
-      | { authenticated: true; username: string; remember: boolean; issuedAt: number; expiresAt: number }
+      | {
+          authenticated: true;
+          username: string;
+          role: Role;
+          remember: boolean;
+          issuedAt: number;
+          expiresAt: number;
+        }
       | { authenticated: false }
     >('GET', '/auth/me'),
   bootstrap: () => request<Bootstrap>('GET', '/bootstrap'),
@@ -95,4 +106,10 @@ export const api = {
   deleteSavings: (id: string) => request<undefined>('DELETE', `/savings/${encodeURIComponent(id)}`),
   putCategories: (doc: CategoriesDoc) => request<CategoriesDoc>('PUT', '/categories', doc),
   patchSettings: (patch: SettingsPatch) => request<Settings>('PATCH', '/settings', patch),
+  changePassword: (input: PasswordChange) => request<{ ok: true }>('POST', '/auth/password', input),
+  users: () => request<{ items: UserSummary[] }>('GET', '/users').then((r) => r.items),
+  createUser: (input: NewUserInput) => request<UserSummary>('POST', '/users', input),
+  resetPassword: (id: string, password: string) =>
+    request<{ ok: true }>('PUT', `/users/${encodeURIComponent(id)}/password`, { password }),
+  deleteUser: (id: string) => request<undefined>('DELETE', `/users/${encodeURIComponent(id)}`),
 };

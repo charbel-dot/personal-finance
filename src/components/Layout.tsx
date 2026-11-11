@@ -36,6 +36,28 @@ const NAV: { to: string; label: string; icon: LucideIcon }[] = [
 const TOP_NAV = ['/categories', '/account', '/settings'];
 /** Phone bottom bar: four destinations around the add button. */
 const BOTTOM_NAV = NAV.filter((n) => !TOP_NAV.includes(n.to));
+/** Desktop sidebar: account and settings sit at the foot, above Sign Out. */
+const SIDEBAR_FOOT = ['/account', '/settings'];
+
+function SidebarLink({ to, label, icon: Icon }: (typeof NAV)[number]) {
+  return (
+    <NavLink
+      to={to}
+      data-tour={to === '/settings' ? 'settings' : undefined}
+      end={to === '/'}
+      className={({ isActive }) =>
+        cn(
+          'flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors outline-none',
+          'hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50',
+          isActive && 'bg-accent text-foreground',
+        )
+      }
+    >
+      <Icon className="size-5" aria-hidden="true" />
+      {label}
+    </NavLink>
+  );
+}
 
 export function PageFallback() {
   return (
@@ -76,6 +98,11 @@ export function Layout() {
   const { openNew } = useQuickAdd();
   const isActive = (to: string) => (to === '/' ? location.pathname === '/' : location.pathname.startsWith(to));
   const signOut = useSignOut();
+
+  // A new page starts at the top (BrowserRouter has no scroll restoration of its own).
+  useEffect(() => {
+    if (!location.hash) window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [location.pathname, location.hash]);
 
   // Keyboard shortcut: "n" opens quick add (ignored while typing or when a dialog is open).
   useEffect(() => {
@@ -125,26 +152,16 @@ export function Layout() {
             </kbd>
           </Button>
           <nav aria-label="Main" className="flex flex-col gap-1" data-tour="nav">
-            {NAV.map(({ to, label, icon: Icon }) => (
-              <NavLink
-                key={to}
-                to={to}
-                data-tour={to === '/settings' ? 'settings' : undefined}
-                end={to === '/'}
-                className={({ isActive }) =>
-                  cn(
-                    'flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors outline-none',
-                    'hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50',
-                    isActive && 'bg-accent text-foreground',
-                  )
-                }
-              >
-                <Icon className="size-5" aria-hidden="true" />
-                {label}
-              </NavLink>
+            {NAV.filter((n) => !SIDEBAR_FOOT.includes(n.to)).map((item) => (
+              <SidebarLink key={item.to} {...item} />
             ))}
           </nav>
-          <div className="mt-auto border-t pt-3">
+          <div className="mt-auto flex flex-col gap-1 border-t pt-3">
+            <nav aria-label="Account" className="flex flex-col gap-1">
+              {NAV.filter((n) => SIDEBAR_FOOT.includes(n.to)).map((item) => (
+                <SidebarLink key={item.to} {...item} />
+              ))}
+            </nav>
             <button
               type="button"
               onClick={() => void signOut()}

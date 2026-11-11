@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { base64UrlEncode, pbkdf2, verifyPassword } from './crypto';
 import type { Env } from './env';
 import { createToken, sessionCookie, verifyToken } from './session';
+import { ownerPrincipal, type Principal } from './users';
 
 async function makeHash(password: string, iterations = 100_000) {
   const salt = crypto.getRandomValues(new Uint8Array(16));
@@ -28,21 +29,33 @@ describe('session tokens', () => {
     AUTH_PASSWORD_HASH: 'pbkdf2_sha256:100000:abc:def',
     SESSION_SECRET: 'x'.repeat(40),
   } as Env;
+  const owner = ownerPrincipal(env);
+  const asOwner = (uid: string) => Promise.resolve(uid === 'owner' ? owner : null);
 
   it('round-trips and expires', async () => {
     const now = Date.UTC(2026, 10, 9);
-    const { token, maxAge } = await createToken(env, true, now);
+    const { token, maxAge } = await createToken(env, owner, true, now);
     expect(maxAge).toBe(30 * 24 * 3600);
-    expect(await verifyToken(env, token, now + 1000)).toMatchObject({ remember: true });
-    expect(await verifyToken(env, token, now + (maxAge + 1) * 1000)).toBeNull();
+    expect(await verifyToken(env, token, asOwner, now + 1000)).toMatchObject({ remember: true, user: owner });
+    expect(await verifyToken(env, token, asOwner, now + (maxAge + 1) * 1000)).toBeNull();
   });
 
   it('rejects tampered tokens and tokens from an old password', async () => {
-    const { token } = await createToken(env, false);
+    const { token } = await createToken(env, owner, false);
     const [body, sig] = token.split('.');
-    expect(await verifyToken(env, `${body}x.${sig}`)).toBeNull();
-    expect(await verifyToken({ ...env, SESSION_SECRET: 'y'.repeat(40) }, token)).toBeNull();
-    expect(await verifyToken({ ...env, AUTH_PASSWORD_HASH: 'changed' }, token)).toBeNull();
+    expect(await verifyToken(env, `${body}x.${sig}`, asOwner)).toBeNull();
+    expect(await verifyToken({ ...env, SESSION_SECRET: 'y'.repeat(40) }, token, asOwner)).toBeNull();
+    const changed = ownerPrincipal({ ...env, AUTH_PASSWORD_HASH: 'changed' });
+    expect(await verifyToken(env, token, () => Promise.resolve(changed))).toBeNull();
+  });
+
+  it('binds a token to its user: deleted users and new passwords end the session', async () => {
+    const member: Principal = { id: 'u_1', username: 'sam', role: 'member', secret: 'hash-1' };
+    const { token } = await createToken(env, member, false);
+    expect(await verifyToken(env, token, () => Promise.resolve(member))).toMatchObject({ user: member });
+    expect(await verifyToken(env, token, () => Promise.resolve(null))).toBeNull();
+    const reset = { ...member, secret: 'hash-2' };
+    expect(await verifyToken(env, token, () => Promise.resolve(reset))).toBeNull();
   });
 
   it('sets a session-only cookie unless remembered', () => {

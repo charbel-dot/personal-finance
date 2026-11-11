@@ -7,6 +7,9 @@ import {
   id as idSchema,
   loginInput,
   monthKey,
+  newUserInput,
+  passwordChange,
+  passwordReset,
   rangeQuery,
   recurringInput,
   savingsInput,
@@ -44,8 +47,23 @@ import type { Env } from './env';
 import { checkLimit, clearClient, clientKey, recordFailure } from './rateLimit';
 import { clearSessionCookie, createToken, SESSION_COOKIE, sessionCookie, verifyToken, type Session } from './session';
 import { ConflictError, CorruptDataError } from './store';
+import {
+  createUser,
+  dataBucket,
+  deleteUser,
+  findMember,
+  listUsers,
+  ownerPrincipal,
+  principalFor,
+  setPassword,
+  type Principal,
+} from './users';
 
-type AppEnv = { Bindings: Env; Variables: { session: Session } };
+/** `db` is the signed-in user's own storage: the bucket root for the owner, their folder otherwise. */
+type AppEnv = { Bindings: Env; Variables: { session: Session; db: R2Bucket } };
+
+/** Run when no account matches, so a wrong username costs the same time as a wrong password. */
+const DUMMY_HASH = 'pbkdf2_sha256:100000:AAAAAAAAAAAAAAAAAAAAAA:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
 
 class HttpError extends Error {
   constructor(
@@ -150,19 +168,22 @@ export function createApp() {
       throw new HttpError(429, `Too many attempts. Try again in ${Math.ceil(retryAfter / 60)} min.`);
     }
     const input = await parseBody(c, loginInput);
-    // Always run the slow hash so response time doesn't reveal whether the username matched.
-    const [userA, userB, passwordOk] = await Promise.all([
-      sha256(input.username),
-      sha256(c.env.AUTH_USERNAME),
-      verifyPassword(input.password, c.env.AUTH_PASSWORD_HASH),
-    ]);
-    const userOk = timingSafeEqual(new TextEncoder().encode(userA), new TextEncoder().encode(userB));
-    if (!userOk || !passwordOk) {
+    // The owner signs in with the configured secrets; everyone else is looked up in the user list.
+    const [userA, userB] = await Promise.all([sha256(input.username), sha256(c.env.AUTH_USERNAME)]);
+    const isOwner = timingSafeEqual(new TextEncoder().encode(userA), new TextEncoder().encode(userB));
+    const member = isOwner ? null : await findMember(c.env.BUCKET, { username: input.username });
+    const user: Principal | null = isOwner ? ownerPrincipal(c.env) : (member?.principal ?? null);
+    // Always run the slow hash so response time doesn't reveal whether the username exists.
+    const passwordOk = await verifyPassword(
+      input.password,
+      isOwner ? c.env.AUTH_PASSWORD_HASH : (member?.passwordHash ?? DUMMY_HASH),
+    );
+    if (!user || !passwordOk) {
       await recordFailure(c.env.BUCKET, key);
       throw new HttpError(401, 'Incorrect username or password');
     }
     await clearClient(c.env.BUCKET, key);
-    const { token, maxAge } = await createToken(c.env, input.remember);
+    const { token, maxAge } = await createToken(c.env, user, input.remember);
     c.header('Set-Cookie', sessionCookie(token, input.remember, maxAge));
     return c.json({ ok: true });
   });
@@ -174,12 +195,15 @@ export function createApp() {
 
   // Session probe: public so the logged-out state is a normal 200, not a console-visible 401.
   app.get('/auth/me', async (c) => {
-    const s = await verifyToken(c.env, readCookie(c.req.header('Cookie'), SESSION_COOKIE));
+    const s = await verifyToken(c.env, readCookie(c.req.header('Cookie'), SESSION_COOKIE), (uid) =>
+      principalFor(c.env, uid),
+    );
     return c.json(
       s
         ? {
             authenticated: true,
-            username: c.env.AUTH_USERNAME,
+            username: s.user.username,
+            role: s.user.role,
             remember: s.remember,
             issuedAt: s.issuedAt,
             expiresAt: s.expiresAt,
@@ -190,16 +214,19 @@ export function createApp() {
 
   // Everything below requires a valid session.
   app.use('*', async (c, next) => {
-    const session = await verifyToken(c.env, readCookie(c.req.header('Cookie'), SESSION_COOKIE));
+    const session = await verifyToken(c.env, readCookie(c.req.header('Cookie'), SESSION_COOKIE), (uid) =>
+      principalFor(c.env, uid),
+    );
     if (!session) {
       c.header('Set-Cookie', clearSessionCookie());
       throw new HttpError(401, 'Not signed in');
     }
     c.set('session', session);
+    c.set('db', dataBucket(c.env.BUCKET, session.user.id));
     await next();
     // Sliding renewal for "remember me" sessions older than a day.
     if (session.remember && Date.now() / 1000 - session.issuedAt > 24 * 60 * 60) {
-      const { token, maxAge } = await createToken(c.env, true);
+      const { token, maxAge } = await createToken(c.env, session.user, true);
       c.header('Set-Cookie', sessionCookie(token, true, maxAge), { append: true });
     }
   });
@@ -208,14 +235,14 @@ export function createApp() {
 
   app.get('/bootstrap', async (c) => {
     const [{ generated, today, rules: recurring }, settings, categories] = await Promise.all([
-      reconcileRecurring(c.env.BUCKET),
-      getSettings(c.env.BUCKET),
-      getCategories(c.env.BUCKET),
+      reconcileRecurring(c.var.db),
+      getSettings(c.var.db),
+      getCategories(c.var.db),
     ]);
     return c.json({ settings, categories, recurring, generated, today } satisfies Bootstrap);
   });
 
-  app.get('/balance', async (c) => c.json(await getBalance(c.env.BUCKET)));
+  app.get('/balance', async (c) => c.json(await getBalance(c.var.db)));
 
   /* ------------------------------------------------------------------- transactions */
 
@@ -224,86 +251,86 @@ export function createApp() {
     const to = c.req.query('to');
     if (from || to) {
       const range = parseParam(rangeQuery, { from, to }, 'date range');
-      return c.json({ items: await listTransactions(c.env.BUCKET, range.from, range.to) });
+      return c.json({ items: await listTransactions(c.var.db, range.from, range.to) });
     }
-    return c.json({ items: await listTransactions(c.env.BUCKET) });
+    return c.json({ items: await listTransactions(c.var.db) });
   });
 
   app.post('/transactions', async (c) => {
     const input = await parseBody(c, transactionInput);
-    return c.json(await createTransaction(c.env.BUCKET, input), 201);
+    return c.json(await createTransaction(c.var.db, input), 201);
   });
 
   app.put('/transactions/:id', async (c) => {
     const id = parseParam(idSchema, c.req.param('id'), 'id');
     const from = parseParam(monthKey, c.req.query('month'), 'month');
     const input = await parseBody(c, transactionInput);
-    return c.json(await updateTransaction(c.env.BUCKET, id, from, input));
+    return c.json(await updateTransaction(c.var.db, id, from, input));
   });
 
   app.delete('/transactions/:id', async (c) => {
     const id = parseParam(idSchema, c.req.param('id'), 'id');
     const month = parseParam(monthKey, c.req.query('month'), 'month');
-    await deleteTransaction(c.env.BUCKET, id, month);
+    await deleteTransaction(c.var.db, id, month);
     return c.body(null, 204);
   });
 
   /* ---------------------------------------------------------------------- recurring */
 
-  app.get('/recurring', async (c) => c.json({ items: await getRecurring(c.env.BUCKET) }));
+  app.get('/recurring', async (c) => c.json({ items: await getRecurring(c.var.db) }));
 
   app.post('/recurring', async (c) => {
-    const rule = await createRecurring(c.env.BUCKET, await parseBody(c, recurringInput));
-    await reconcileRecurring(c.env.BUCKET);
+    const rule = await createRecurring(c.var.db, await parseBody(c, recurringInput));
+    await reconcileRecurring(c.var.db);
     return c.json(rule, 201);
   });
 
   app.put('/recurring/:id', async (c) => {
     const id = parseParam(idSchema, c.req.param('id'), 'id');
-    const rule = await updateRecurring(c.env.BUCKET, id, await parseBody(c, recurringInput));
-    await reconcileRecurring(c.env.BUCKET);
+    const rule = await updateRecurring(c.var.db, id, await parseBody(c, recurringInput));
+    await reconcileRecurring(c.var.db);
     return c.json(rule);
   });
 
   app.delete('/recurring/:id', async (c) => {
-    await deleteRecurring(c.env.BUCKET, parseParam(idSchema, c.req.param('id'), 'id'));
+    await deleteRecurring(c.var.db, parseParam(idSchema, c.req.param('id'), 'id'));
     return c.body(null, 204);
   });
 
-  app.post('/recurring/reconcile', async (c) => c.json(await reconcileRecurring(c.env.BUCKET)));
+  app.post('/recurring/reconcile', async (c) => c.json(await reconcileRecurring(c.var.db)));
 
   /* ------------------------------------------------------------------------ savings */
 
-  app.get('/savings', async (c) => c.json(await listSavings(c.env.BUCKET)));
+  app.get('/savings', async (c) => c.json(await listSavings(c.var.db)));
 
   // Goals are registered before /savings/:id so "goals" is never read as an entry id.
-  app.post('/savings/goals', async (c) => c.json(await createGoal(c.env.BUCKET, await parseBody(c, goalInput)), 201));
+  app.post('/savings/goals', async (c) => c.json(await createGoal(c.var.db, await parseBody(c, goalInput)), 201));
 
   app.put('/savings/goals/:id', async (c) => {
     const id = parseParam(idSchema, c.req.param('id'), 'id');
-    return c.json(await updateGoal(c.env.BUCKET, id, await parseBody(c, goalInput)));
+    return c.json(await updateGoal(c.var.db, id, await parseBody(c, goalInput)));
   });
 
   app.delete('/savings/goals/:id', async (c) => {
-    await deleteGoal(c.env.BUCKET, parseParam(idSchema, c.req.param('id'), 'id'));
+    await deleteGoal(c.var.db, parseParam(idSchema, c.req.param('id'), 'id'));
     return c.body(null, 204);
   });
 
-  app.post('/savings', async (c) => c.json(await createSavings(c.env.BUCKET, await parseBody(c, savingsInput)), 201));
+  app.post('/savings', async (c) => c.json(await createSavings(c.var.db, await parseBody(c, savingsInput)), 201));
 
   app.put('/savings/:id', async (c) => {
     const id = parseParam(idSchema, c.req.param('id'), 'id');
-    return c.json(await updateSavings(c.env.BUCKET, id, await parseBody(c, savingsInput)));
+    return c.json(await updateSavings(c.var.db, id, await parseBody(c, savingsInput)));
   });
 
   app.delete('/savings/:id', async (c) => {
-    await deleteSavings(c.env.BUCKET, parseParam(idSchema, c.req.param('id'), 'id'));
+    await deleteSavings(c.var.db, parseParam(idSchema, c.req.param('id'), 'id'));
     return c.body(null, 204);
   });
 
   /* --------------------------------------------------------------- settings/categories */
 
-  app.put('/categories', async (c) => c.json(await putCategories(c.env.BUCKET, await parseBody(c, categoriesDoc))));
+  app.put('/categories', async (c) => c.json(await putCategories(c.var.db, await parseBody(c, categoriesDoc))));
 
   app.patch('/settings', async (c) => {
     const patch = await parseBody(c, settingsPatch);
@@ -314,7 +341,49 @@ export function createApp() {
         throw new HttpError(400, 'Unknown timezone');
       }
     }
-    return c.json(await patchSettings(c.env.BUCKET, patch));
+    return c.json(await patchSettings(c.var.db, patch));
+  });
+
+  /* -------------------------------------------------------------------------- users */
+
+  // A member changes their own password. The owner's lives in Cloudflare secrets.
+  app.post('/auth/password', async (c) => {
+    const { user, remember } = c.var.session;
+    if (user.role === 'owner') {
+      throw new HttpError(400, 'Your password is a Cloudflare secret: change it with npm run hash-password.');
+    }
+    const input = await parseBody(c, passwordChange);
+    if (!(await verifyPassword(input.current, user.secret))) throw new HttpError(400, 'Current password is wrong');
+    const updated = await setPassword(c.env.BUCKET, user.id, input.next);
+    // Other devices are signed out (their tokens carry the old fingerprint); keep this one signed in.
+    const { token, maxAge } = await createToken(c.env, updated, remember);
+    c.header('Set-Cookie', sessionCookie(token, remember, maxAge));
+    return c.json({ ok: true });
+  });
+
+  // Managing people is the owner's job.
+  app.use('/users/*', async (c, next) => {
+    if (c.var.session.user.role !== 'owner') throw new HttpError(403, 'Only the owner can manage users');
+    await next();
+  });
+  app.use('/users', async (c, next) => {
+    if (c.var.session.user.role !== 'owner') throw new HttpError(403, 'Only the owner can manage users');
+    await next();
+  });
+
+  app.get('/users', async (c) => c.json({ items: await listUsers(c.env.BUCKET) }));
+
+  app.post('/users', async (c) => c.json(await createUser(c.env, await parseBody(c, newUserInput)), 201));
+
+  app.put('/users/:id/password', async (c) => {
+    const id = parseParam(idSchema, c.req.param('id'), 'id');
+    await setPassword(c.env.BUCKET, id, (await parseBody(c, passwordReset)).password);
+    return c.json({ ok: true });
+  });
+
+  app.delete('/users/:id', async (c) => {
+    await deleteUser(c.env.BUCKET, parseParam(idSchema, c.req.param('id'), 'id'));
+    return c.body(null, 204);
   });
 
   app.notFound(() => {

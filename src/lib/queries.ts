@@ -19,6 +19,7 @@ export const keys = {
   transactions: (from?: string, to?: string) => ['transactions', from ?? 'all', to ?? 'all'] as const,
   allTransactions: ['transactions'] as const,
   savings: ['savings'] as const,
+  users: ['users'] as const,
 };
 
 export function useMe() {
@@ -146,4 +147,34 @@ export function usePatchSettings() {
       return qc.invalidateQueries({ queryKey: keys.balance });
     },
   });
+}
+
+/* --------------------------------------------------------------------------- people */
+
+export function useUsers(enabled: boolean) {
+  return useQuery({ queryKey: keys.users, queryFn: api.users, enabled, staleTime: 60_000 });
+}
+
+export function useCreateUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: api.createUser,
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.users }),
+  });
+}
+
+export function useDeleteUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: api.deleteUser,
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.users }),
+  });
+}
+
+export function useResetPassword() {
+  return useMutation({ mutationFn: (v: { id: string; password: string }) => api.resetPassword(v.id, v.password) });
+}
+
+export function useChangePassword() {
+  return useMutation({ mutationFn: api.changePassword });
 }

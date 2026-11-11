@@ -8,7 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api';
-import { keys, useMe } from '@/lib/queries';
+import { useMe } from '@/lib/queries';
 import { cn } from '@/lib/utils';
 
 export default function Login() {
@@ -40,7 +40,8 @@ export default function Login() {
     setError(null);
     try {
       await api.login({ username: username.trim(), password, remember });
-      await qc.invalidateQueries({ queryKey: keys.me });
+      // Drop anything cached from a previous account on this device before loading this one's data.
+      qc.clear();
       void navigate(from.startsWith('/') && !from.startsWith('//') ? from : '/', { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign in failed.');

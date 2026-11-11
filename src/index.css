@@ -326,6 +326,8 @@
   --glass-edge: oklch(0 0 0 / 7%);
   --glass-shine: oklch(1 0 0 / 70%);
   --glass-shadow: oklch(0.2 0 0 / 8%);
+  /* Backdrop behind dialogs and sheets. */
+  --scrim: oklch(0 0 0 / 45%);
 }
 .dark {
   --glass-panel: color-mix(in oklch, var(--card) 72%, transparent);
@@ -335,6 +337,7 @@
   --glass-edge: oklch(1 0 0 / 10%);
   --glass-shine: oklch(1 0 0 / 9%);
   --glass-shadow: oklch(0 0 0 / 40%);
+  --scrim: oklch(0 0 0 / 60%);
 }
 
 @layer components {

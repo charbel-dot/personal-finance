@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { parseIso } from '../../shared/dates';
 import type { Transaction } from '../../shared/schema';
 import { Page, PageHeader } from '@/components/Layout';
+import { ChangePasswordCard, PeopleCard } from '@/components/People';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -60,6 +61,7 @@ export default function Account() {
   const signOut = useSignOut();
   const session = me.data?.authenticated ? me.data : null;
   const initial = (session?.username.at(0) ?? '?').toUpperCase();
+  const isOwner = session?.role === 'owner';
 
   return (
     <Page>
@@ -77,7 +79,13 @@ export default function Account() {
               <div className="truncate text-xl font-semibold" translate="no">
                 {session?.username ?? <Skeleton className="h-6 w-32" />}
               </div>
-              <p className="text-sm text-muted-foreground">Owner · single-user account</p>
+              <p className="text-sm text-muted-foreground">
+                {session
+                  ? isOwner
+                    ? 'Owner · manages who can sign in'
+                    : 'Member · your data is private to you'
+                  : null}
+              </p>
             </div>
             <Button variant="outline" onClick={() => void signOut()}>
               <LogOut aria-hidden="true" /> Sign Out
@@ -115,30 +123,36 @@ export default function Account() {
 
         <DataCard />
 
-        <Card className="lg:col-span-3">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <KeyRound className="size-4 text-brand-fg" aria-hidden="true" /> Change Password
-            </CardTitle>
-            <CardDescription>
-              The password lives as a Cloudflare secret, never in the app. Changing it signs out every device.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ol className="list-inside list-decimal space-y-2 text-sm">
-              <li>
-                In the project folder, run <Code>node scripts/hash-password.mjs</Code> and enter the new password.
-              </li>
-              <li>
-                Store the printed hash with{' '}
-                <Code>npx wrangler pages secret put AUTH_PASSWORD_HASH --project-name money-app</Code>
-              </li>
-              <li>
-                Redeploy with <Code>npm run deploy</Code>.
-              </li>
-            </ol>
-          </CardContent>
-        </Card>
+        {isOwner && <PeopleCard />}
+
+        {session && !isOwner && <ChangePasswordCard />}
+
+        {isOwner && (
+          <Card className="lg:col-span-3">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <KeyRound className="size-4 text-brand-fg" aria-hidden="true" /> Change Password
+              </CardTitle>
+              <CardDescription>
+                The password lives as a Cloudflare secret, never in the app. Changing it signs out every device.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ol className="list-inside list-decimal space-y-2 text-sm">
+                <li>
+                  In the project folder, run <Code>node scripts/hash-password.mjs</Code> and enter the new password.
+                </li>
+                <li>
+                  Store the printed hash with{' '}
+                  <Code>npx wrangler pages secret put AUTH_PASSWORD_HASH --project-name money-app</Code>
+                </li>
+                <li>
+                  Redeploy with <Code>npm run deploy</Code>.
+                </li>
+              </ol>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </Page>
   );
@@ -261,8 +275,8 @@ function DataCard() {
       <CardHeader>
         <CardTitle className="text-base">Your Data</CardTitle>
         <CardDescription>
-          {first ? `Tracking since ${longDate.format(parseIso(first))}.` : 'Nothing logged yet.'} Stored privately in
-          your own Cloudflare R2 bucket.
+          {first ? `Tracking since ${longDate.format(parseIso(first))}.` : 'Nothing logged yet.'} Stored privately and
+          visible only to you.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
