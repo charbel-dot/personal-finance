@@ -106,21 +106,41 @@ function useVisibleArea(active: boolean): VisibleArea | null {
   return area;
 }
 
-/** Keep the focused field in view inside the sheet's own scroll area once the keyboard settles. */
+/** Scroll the focused field into the sheet's scroll area (scroll-padding keeps it clear of the sticky footer). */
+function revealFocused(body: HTMLElement | null) {
+  const el = document.activeElement;
+  if (!body || !(el instanceof HTMLElement) || !body.contains(el)) return;
+  el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+
+/**
+ * Keep the focused field visible while typing: once the keyboard resizes the visible area, and
+ * whenever focus moves to another field (the keyboard may already be up, so no resize fires).
+ * Returns the `onFocus` handler for the scroll area.
+ */
 function useRevealFocusedField(body: RefObject<HTMLDivElement | null>, area: VisibleArea | null) {
   const height = area?.height;
+  const timer = useRef(0);
   useEffect(() => {
-    const el = document.activeElement;
-    if (!body.current || !(el instanceof HTMLElement) || !body.current.contains(el)) return;
-    el.scrollIntoView({ block: 'nearest' });
+    revealFocused(body.current);
   }, [body, height]);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  return () => {
+    window.clearTimeout(timer.current);
+    // Wait for the keyboard to finish animating before measuring.
+    timer.current = window.setTimeout(() => {
+      revealFocused(body.current);
+    }, 320);
+  };
 }
 
 function PhoneSheet({ open, onClose, title, description, children }: Props) {
   const area = useVisibleArea(open);
   const body = useRef<HTMLDivElement>(null);
-  useRevealFocusedField(body, area);
-  // The frame covers exactly the visible area; the sheet hugs its bottom edge.
+  const onBodyFocus = useRevealFocusedField(body, area);
+  const keyboard = area?.keyboard ?? false;
+  // The frame covers exactly the visible area; the sheet hugs its bottom edge, and while the
+  // keyboard is up it fills the whole visible area so the field being typed in has maximum room.
   // While the keyboard is up the home indicator is hidden, so the footer drops its safe-area padding.
   const frame: CSSProperties & { '--sheet-safe-bottom'?: string } = {
     ...(area ? { top: area.top, height: area.height } : { top: 0, bottom: 0 }),
@@ -143,13 +163,21 @@ function PhoneSheet({ open, onClose, title, description, children }: Props) {
               e.preventDefault();
             }}
             className={cn(
-              'pointer-events-auto flex max-h-[min(94%,92dvh)] flex-col glass-panel-strong rounded-t-[28px] border-t outline-none',
+              'pointer-events-auto flex flex-col glass-panel-strong border-t outline-none transition-[border-radius] duration-200',
+              keyboard ? 'h-full max-h-full rounded-t-none' : 'max-h-[min(94%,92dvh)] rounded-t-[28px]',
               'data-[state=closed]:animate-out data-[state=closed]:duration-200 data-[state=closed]:slide-out-to-bottom',
               'data-[state=open]:animate-in data-[state=open]:duration-300 data-[state=open]:ease-out-expo data-[state=open]:slide-in-from-bottom',
             )}
           >
-            <div className="mx-auto mt-2.5 h-1.5 w-10 shrink-0 rounded-full bg-muted" aria-hidden="true" />
-            <div className="flex shrink-0 items-start justify-between gap-3 px-4 pt-2 pb-3">
+            {!keyboard && (
+              <div className="mx-auto mt-2.5 h-1.5 w-10 shrink-0 rounded-full bg-muted" aria-hidden="true" />
+            )}
+            <div
+              className={cn(
+                'flex shrink-0 items-start justify-between gap-3 px-4 pb-3',
+                keyboard ? 'pt-[max(--spacing(3),env(safe-area-inset-top))]' : 'pt-2',
+              )}
+            >
               <div className="min-w-0">
                 <DialogPrimitive.Title className="text-lg font-semibold">{title}</DialogPrimitive.Title>
                 <DialogPrimitive.Description className={description ? 'text-sm text-muted-foreground' : 'sr-only'}>
@@ -165,7 +193,9 @@ function PhoneSheet({ open, onClose, title, description, children }: Props) {
             </div>
             <div
               ref={body}
-              className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 [--sheet-px:--spacing(4)]"
+              onFocus={onBodyFocus}
+              // Scroll padding keeps a revealed field clear of the sticky <SheetFooter>.
+              className="min-h-0 flex-1 scroll-pt-4 scroll-pb-28 overflow-y-auto overscroll-contain px-4 [--sheet-px:--spacing(4)]"
             >
               {children}
             </div>
