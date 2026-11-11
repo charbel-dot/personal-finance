@@ -53,7 +53,7 @@ function download(filename: string, content: string, type: string) {
 /** RFC 4180 field: quote when needed, double inner quotes; neutralise spreadsheet formulas. */
 function csvField(value: string) {
   const safe = /^[=+\-@]/.test(value) ? `'${value}` : value;
-  return /[",\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
+  return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
 export default function Account() {

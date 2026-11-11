@@ -44,7 +44,7 @@ import {
   ValidationError,
 } from './data';
 import type { Env } from './env';
-import { checkLimit, clearClient, clientKey, recordFailure } from './rateLimit';
+import { attemptKeys, releaseAttempt, reserveAttempt, type AttemptKeys } from './rateLimit';
 import { clearSessionCookie, createToken, SESSION_COOKIE, sessionCookie, verifyToken, type Session } from './session';
 import { ConflictError, CorruptDataError } from './store';
 import {
@@ -106,6 +106,15 @@ function readCookie(header: string | undefined, name: string): string | undefine
 
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
+/** Reserves a sign-in attempt (see rateLimit.ts) or answers 429 with Retry-After. */
+async function reserveOrThrow(c: Context<AppEnv>, keys: AttemptKeys) {
+  const retryAfter = await reserveAttempt(c.env.BUCKET, keys);
+  if (retryAfter > 0) {
+    c.header('Retry-After', String(retryAfter));
+    throw new HttpError(429, `Too many attempts. Try again in ${Math.ceil(retryAfter / 60)} min.`);
+  }
+}
+
 export function createApp() {
   const app = new Hono<AppEnv>().basePath('/api');
 
@@ -113,6 +122,7 @@ export function createApp() {
   app.use('*', async (c, next) => {
     await next();
     c.header('Cache-Control', 'no-store');
+    c.header('Strict-Transport-Security', 'max-age=63072000; includeSubDomains');
     c.header('X-Content-Type-Options', 'nosniff');
     c.header('Referrer-Policy', 'no-referrer');
     c.header('X-Frame-Options', 'DENY');
@@ -160,14 +170,9 @@ export function createApp() {
   /* --------------------------------------------------------------------------- auth */
 
   app.post('/auth/login', async (c) => {
-    const ip = c.req.header('CF-Connecting-IP') ?? 'local';
-    const key = await clientKey(ip);
-    const retryAfter = await checkLimit(c.env.BUCKET, key);
-    if (retryAfter > 0) {
-      c.header('Retry-After', String(retryAfter));
-      throw new HttpError(429, `Too many attempts. Try again in ${Math.ceil(retryAfter / 60)} min.`);
-    }
     const input = await parseBody(c, loginInput);
+    const keys = await attemptKeys(c.req.header('CF-Connecting-IP') ?? 'local', input.username);
+    await reserveOrThrow(c, keys);
     // The owner signs in with the configured secrets; everyone else is looked up in the user list.
     const [userA, userB] = await Promise.all([sha256(input.username), sha256(c.env.AUTH_USERNAME)]);
     const isOwner = timingSafeEqual(new TextEncoder().encode(userA), new TextEncoder().encode(userB));
@@ -178,11 +183,8 @@ export function createApp() {
       input.password,
       isOwner ? c.env.AUTH_PASSWORD_HASH : (member?.passwordHash ?? DUMMY_HASH),
     );
-    if (!user || !passwordOk) {
-      await recordFailure(c.env.BUCKET, key);
-      throw new HttpError(401, 'Incorrect username or password');
-    }
-    await clearClient(c.env.BUCKET, key);
+    if (!user || !passwordOk) throw new HttpError(401, 'Incorrect username or password');
+    await releaseAttempt(c.env.BUCKET, keys);
     const { token, maxAge } = await createToken(c.env, user, input.remember);
     c.header('Set-Cookie', sessionCookie(token, input.remember, maxAge));
     return c.json({ ok: true });
@@ -224,8 +226,10 @@ export function createApp() {
     c.set('session', session);
     c.set('db', dataBucket(c.env.BUCKET, session.user.id));
     await next();
-    // Sliding renewal for "remember me" sessions older than a day.
-    if (session.remember && Date.now() / 1000 - session.issuedAt > 24 * 60 * 60) {
+    // Sliding renewal for "remember me" sessions older than a day, unless the handler already
+    // issued a session (a password change does), which must not be overwritten by a stale one.
+    const issued = c.res.headers.has('Set-Cookie');
+    if (!issued && session.remember && Date.now() / 1000 - session.issuedAt > 24 * 60 * 60) {
       const { token, maxAge } = await createToken(c.env, session.user, true);
       c.header('Set-Cookie', sessionCookie(token, true, maxAge), { append: true });
     }
@@ -352,9 +356,17 @@ export function createApp() {
     if (user.role === 'owner') {
       throw new HttpError(400, 'Your password is a Cloudflare secret: change it with npm run hash-password.');
     }
-    const input = await parseBody(c, passwordChange);
+    // Guesses at the current password share the account's sign-in budget.
+    const [input, keys] = await Promise.all([
+      parseBody(c, passwordChange),
+      attemptKeys(c.req.header('CF-Connecting-IP') ?? 'local', user.username),
+    ]);
+    await reserveOrThrow(c, keys);
     if (!(await verifyPassword(input.current, user.secret))) throw new HttpError(400, 'Current password is wrong');
-    const updated = await setPassword(c.env.BUCKET, user.id, input.next);
+    const [updated] = await Promise.all([
+      setPassword(c.env.BUCKET, user.id, input.next),
+      releaseAttempt(c.env.BUCKET, keys),
+    ]);
     // Other devices are signed out (their tokens carry the old fingerprint); keep this one signed in.
     const { token, maxAge } = await createToken(c.env, updated, remember);
     c.header('Set-Cookie', sessionCookie(token, remember, maxAge));

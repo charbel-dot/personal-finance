@@ -107,7 +107,14 @@ export async function deleteUser(bucket: R2Bucket, userId: string): Promise<void
     return items.length === current.items.length ? undefined : { next: { items }, result: undefined };
   });
   if (!changed) throw new NotFoundError('User');
-  const keys = await listKeys(bucket, userPrefix(userId));
+  // Sweep twice: a request or cron run that passed its session check just before the account was
+  // removed can still write once, after the first listing.
+  await purgePrefix(bucket, userPrefix(userId));
+  await purgePrefix(bucket, userPrefix(userId));
+}
+
+async function purgePrefix(bucket: R2Bucket, prefix: string) {
+  const keys = await listKeys(bucket, prefix);
   const batches = [];
   for (let i = 0; i < keys.length; i += 1000) batches.push(keys.slice(i, i + 1000));
   await Promise.all(batches.map((batch) => bucket.delete(batch)));

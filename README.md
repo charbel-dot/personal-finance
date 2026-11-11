@@ -94,7 +94,7 @@ public/             _headers (CSP and security headers), icons, theme-init.js
 | `categories.json`              | `{ expense: Category[], income: Category[] }` (defaults until first edit) |
 | `settings.json`                | currency, timezone, opening balance, last-used categories                 |
 | `savings.json`                 | `{ items: SavingsEntry[], goals: SavingsGoal[] }` by source and goal      |
-| `security/login-attempts.json` | rate-limit counters (hashed client keys)                                  |
+| `security/login-attempts.json` | rate-limit counters (hashed client and account keys)                      |
 | `auth/users.json`              | other users: id, username, PBKDF2 password hash, created date             |
 | `users/<id>/…`                 | each other user's own copy of every file above (transactions, settings…)  |
 
@@ -276,8 +276,12 @@ device**. To sign everything out without changing the password, rotate `SESSION_
 - Session: HMAC-SHA256-signed token in a `__Host-` cookie (`HttpOnly; Secure; SameSite=Strict`).
   "Remember me" sets a 30-day cookie that renews as you use it; otherwise it is a session cookie whose
   token expires after 12 h.
-- Login is rate limited: 5 failures per client per 15 min, plus a global cap of 50, stored in R2
-  (strongly consistent, unlike KV) and returning `Retry-After`.
+- Login is rate limited per 15 min: 5 attempts per client (hashed IP) and 20 per account (hashed
+  username), stored in R2 and returning `Retry-After`. Each attempt is reserved in the same
+  conditional write that checks the limit, before the password is verified, so parallel guesses
+  can't slip past; a successful sign-in hands its attempt back. There is no global cap, so nobody
+  can lock every user out. Changing a password draws on the same per-account budget. For extra
+  protection, add a Cloudflare rate-limiting rule on `POST /api/auth/login`.
 - Every `/api` route except login, logout, the session probe and health requires a valid session.
   Mutations also require a same-origin `Origin` and `application/json` (defence in depth on top of
   SameSite).

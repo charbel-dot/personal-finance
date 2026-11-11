@@ -80,7 +80,8 @@ export function generateDue(rules: Recurring[], today: string, nowIso: string): 
           amount: rule.amount,
           categoryId: rule.categoryId,
           date,
-          note: rule.note ? `${rule.name} · ${rule.note}` : rule.name,
+          // Transaction notes cap at 280 characters; a long rule name plus note must still fit.
+          note: (rule.note ? `${rule.name} · ${rule.note}` : rule.name).slice(0, 280),
           recurringId: rule.id,
           createdAt: nowIso,
           updatedAt: nowIso,

@@ -100,6 +100,11 @@ export async function putCategories(bucket: R2Bucket, doc: CategoriesDoc): Promi
       if (next.expense.filter((c) => !c.archived).length === 0 || next.income.filter((c) => !c.archived).length === 0) {
         throw new ValidationError('Keep at least one expense category and one income source');
       }
+      if (next.expense.length > 100 || next.income.length > 100) {
+        throw new ValidationError(
+          'That is the limit of 100 categories per list (archived ones count). Restore one instead.',
+        );
+      }
       return { next, result: undefined };
     },
   );

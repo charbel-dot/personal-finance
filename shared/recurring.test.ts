@@ -8,7 +8,7 @@ import {
   recurringTransactionId,
   upcoming,
 } from './recurring';
-import type { Recurring } from './schema';
+import { transaction, type Recurring } from './schema';
 
 const NOW = '2026-11-09T12:00:00.000Z';
 
@@ -77,6 +77,13 @@ describe('occurrencesBetween', () => {
 });
 
 describe('generateDue', () => {
+  it('keeps generated notes within the 280-character transaction limit', () => {
+    const long = rule({ name: 'n'.repeat(60), note: 'x'.repeat(280) });
+    const { transactions } = generateDue([long], '2026-09-01', NOW);
+    expect(transactions[0]?.note).toHaveLength(280);
+    expect(transaction.safeParse(transactions[0]).success).toBe(true);
+  });
+
   it('creates idempotent transactions and advances the cursor', () => {
     const { transactions, rules } = generateDue([rule()], '2026-11-09', NOW);
     expect(transactions.map((t) => t.date)).toEqual(['2026-09-01', '2026-10-01', '2026-11-01']);

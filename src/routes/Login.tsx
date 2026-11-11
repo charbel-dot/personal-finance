@@ -16,7 +16,9 @@ export default function Login() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = (location.state as { from?: string } | null)?.from ?? '/';
+  const requested = (location.state as { from?: string } | null)?.from ?? '/';
+  // Only ever return to a path on this site.
+  const from = /^\/(?![/\\])/.test(requested) ? requested : '/';
   const ids = { user: useId(), pass: useId(), error: useId(), remember: useId(), caps: useId() };
 
   const [username, setUsername] = useState('');
@@ -42,7 +44,7 @@ export default function Login() {
       await api.login({ username: username.trim(), password, remember });
       // Drop anything cached from a previous account on this device before loading this one's data.
       qc.clear();
-      void navigate(from.startsWith('/') && !from.startsWith('//') ? from : '/', { replace: true });
+      void navigate(from, { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign in failed.');
       setPassword('');
