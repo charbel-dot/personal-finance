@@ -1,3 +1,4 @@
+import { DEFAULT_USD_RATE } from './money';
 import { DEFAULT_BUDGET_RULE, type CategoriesDoc, type Settings } from './schema';
 
 export const DEFAULT_CATEGORIES: CategoriesDoc = {
@@ -24,6 +25,8 @@ export const DEFAULT_CATEGORIES: CategoriesDoc = {
 
 export const DEFAULT_SETTINGS: Settings = {
   currency: 'USD',
+  displayCurrency: 'USD',
+  usdRate: DEFAULT_USD_RATE,
   timezone: 'UTC',
   openingBalance: 0,
   budgetRule: DEFAULT_BUDGET_RULE,

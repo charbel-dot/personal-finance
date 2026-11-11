@@ -9,7 +9,7 @@ describe('settings schema', () => {
   });
 
   it('never injects defaults into a partial update', () => {
-    expect(settingsPatch.parse({ currency: 'EUR' })).toEqual({ currency: 'EUR' });
+    expect(settingsPatch.parse({ displayCurrency: 'LBP' })).toEqual({ displayCurrency: 'LBP' });
   });
 
   it('requires the rule to add up to 100%', () => {

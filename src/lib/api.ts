@@ -14,6 +14,9 @@ import type {
   SavingsEntry,
   SavingsGoal,
   SavingsInput,
+  WhishInput,
+  WhishSummary,
+  WhishTransfer,
   Settings,
   SettingsPatch,
   Transaction,
@@ -104,6 +107,11 @@ export const api = {
   updateSavings: (id: string, input: SavingsInput) =>
     request<SavingsEntry>('PUT', `/savings/${encodeURIComponent(id)}`, input),
   deleteSavings: (id: string) => request<undefined>('DELETE', `/savings/${encodeURIComponent(id)}`),
+  whish: () => request<WhishSummary>('GET', '/whish'),
+  createWhish: (input: WhishInput) => request<WhishTransfer>('POST', '/whish', input),
+  updateWhish: (id: string, input: WhishInput) =>
+    request<WhishTransfer>('PUT', `/whish/${encodeURIComponent(id)}`, input),
+  deleteWhish: (id: string) => request<undefined>('DELETE', `/whish/${encodeURIComponent(id)}`),
   putCategories: (doc: CategoriesDoc) => request<CategoriesDoc>('PUT', '/categories', doc),
   patchSettings: (patch: SettingsPatch) => request<Settings>('PATCH', '/settings', patch),
   changePassword: (input: PasswordChange) => request<{ ok: true }>('POST', '/auth/password', input),

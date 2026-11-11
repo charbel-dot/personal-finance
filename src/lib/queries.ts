@@ -6,6 +6,7 @@ import type {
   RecurringInput,
   GoalInput,
   SavingsInput,
+  WhishInput,
   SettingsPatch,
   Transaction,
   TransactionInput,
@@ -19,6 +20,7 @@ export const keys = {
   transactions: (from?: string, to?: string) => ['transactions', from ?? 'all', to ?? 'all'] as const,
   allTransactions: ['transactions'] as const,
   savings: ['savings'] as const,
+  whish: ['whish'] as const,
   users: ['users'] as const,
 };
 
@@ -57,6 +59,7 @@ function useInvalidateMoney() {
       qc.invalidateQueries({ queryKey: keys.allTransactions }),
       qc.invalidateQueries({ queryKey: keys.balance }),
       qc.invalidateQueries({ queryKey: keys.bootstrap }),
+      qc.invalidateQueries({ queryKey: keys.whish }),
     ]);
 }
 
@@ -186,4 +189,22 @@ export function useChangePassword() {
     mutationFn: api.changePassword,
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.me }),
   });
+}
+
+export function useWhish() {
+  return useQuery({ queryKey: keys.whish, queryFn: api.whish, staleTime: 30_000 });
+}
+
+export function useSaveWhish() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id?: string; input: WhishInput }) =>
+      id ? api.updateWhish(id, input) : api.createWhish(input),
+    onSettled: () => qc.invalidateQueries({ queryKey: keys.whish }),
+  });
+}
+
+export function useDeleteWhish() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: api.deleteWhish, onSettled: () => qc.invalidateQueries({ queryKey: keys.whish }) });
 }

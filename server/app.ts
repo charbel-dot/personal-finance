@@ -15,6 +15,7 @@ import {
   savingsInput,
   settingsPatch,
   transactionInput,
+  whishInput,
   type Bootstrap,
 } from '../shared/schema';
 import { sha256, timingSafeEqual, verifyPassword } from './crypto';
@@ -23,6 +24,10 @@ import {
   createRecurring,
   createSavings,
   createTransaction,
+  createWhishTransfer,
+  deleteWhishTransfer,
+  getWhish,
+  updateWhishTransfer,
   deleteGoal,
   deleteRecurring,
   deleteSavings,
@@ -329,6 +334,22 @@ export function createApp() {
 
   app.delete('/savings/:id', async (c) => {
     await deleteSavings(c.var.db, parseParam(idSchema, c.req.param('id'), 'id'));
+    return c.body(null, 204);
+  });
+
+  /* -------------------------------------------------------------------- whish money */
+
+  app.get('/whish', async (c) => c.json(await getWhish(c.var.db)));
+
+  app.post('/whish', async (c) => c.json(await createWhishTransfer(c.var.db, await parseBody(c, whishInput)), 201));
+
+  app.put('/whish/:id', async (c) => {
+    const id = parseParam(idSchema, c.req.param('id'), 'id');
+    return c.json(await updateWhishTransfer(c.var.db, id, await parseBody(c, whishInput)));
+  });
+
+  app.delete('/whish/:id', async (c) => {
+    await deleteWhishTransfer(c.var.db, parseParam(idSchema, c.req.param('id'), 'id'));
     return c.body(null, 204);
   });
 

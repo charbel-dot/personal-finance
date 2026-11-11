@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { pick, useUrlState } from '@/hooks/use-url-state';
-import { formatDayHeading, useMoney } from '@/lib/format';
+import { formatDayHeading, useCurrency, useMoney } from '@/lib/format';
 import { useAppData, useTransactions } from '@/lib/queries';
 import { localToday, localYesterday } from '@/lib/today';
 
@@ -47,6 +47,7 @@ function rangeFor(kind: RangeKind, custom: Range, today: string): Range | null {
 export default function History() {
   const { categories } = useAppData();
   const money = useMoney();
+  const { toInput } = useCurrency();
   const today = localToday();
 
   // Filters live in the URL (?q=&type=&category=&range=&from=&to=) so they are shareable and survive Back.
@@ -85,11 +86,19 @@ export default function History() {
       if (type !== 'all' && t.type !== type) return false;
       if (categoryId !== 'all' && t.categoryId !== categoryId) return false;
       if (!deferredQuery) return true;
-      const haystack =
-        `${t.note ?? ''} ${catById.get(t.categoryId)?.name ?? ''} ${(t.amount / 100).toFixed(2)}`.toLowerCase();
+      // Amounts are searchable as typed in either currency ("12.50" or "150000").
+      const haystack = [
+        t.note,
+        t.to,
+        catById.get(t.categoryId)?.name,
+        toInput(t.amount, 'USD'),
+        toInput(t.amount, 'LBP'),
+      ]
+        .join(' ')
+        .toLowerCase();
       return haystack.includes(deferredQuery);
     });
-  }, [tx.data, type, categoryId, deferredQuery, catById]);
+  }, [tx.data, type, categoryId, deferredQuery, catById, toInput]);
 
   const totals = useMemo(() => {
     let income = 0;

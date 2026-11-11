@@ -32,9 +32,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useQuickAdd } from '@/context/quickAdd';
 import { useCountUp } from '@/hooks/use-count-up';
 import { pick, useUrlState } from '@/hooks/use-url-state';
-import { formatDate, formatInDays, useMoney } from '@/lib/format';
+import { formatDate, formatInDays, useMoney, useSecondMoney } from '@/lib/format';
 import { resolvePeriod, type Period, type PeriodKind } from '@/lib/period';
-import { useAppData, useBalance, useMe, useTransactions } from '@/lib/queries';
+import { useAppData, useBalance, useMe, useTransactions, useWhish } from '@/lib/queries';
 import { localToday } from '@/lib/today';
 import { cn } from '@/lib/utils';
 import { CategoryCard, PaceCard } from './DashboardCharts';
@@ -341,18 +341,21 @@ function BalanceCard({ label, range, analysis }: { label: string; range: Range; 
         </CardAction>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="text-4xl font-bold tracking-tight sm:text-5xl" aria-live="polite">
-          {balance.data ? (
-            <Link
-              to="/history?range=all"
-              className="-m-1 inline-block rounded-xl p-1 outline-none hover:bg-accent/40 focus-visible:ring-[3px] focus-visible:ring-ring/50"
-              aria-label="Balance: view all transactions"
-            >
-              <AnimatedMoney cents={balance.data.balance} className={negative ? 'text-destructive' : 'text-income'} />
-            </Link>
-          ) : (
-            <Skeleton className="h-12 w-56" />
-          )}
+        <div className="space-y-2">
+          <div className="text-4xl font-bold tracking-tight sm:text-5xl" aria-live="polite">
+            {balance.data ? (
+              <Link
+                to="/history?range=all"
+                className="-m-1 inline-block rounded-xl p-1 outline-none hover:bg-accent/40 focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                aria-label="Balance: view all transactions"
+              >
+                <AnimatedMoney cents={balance.data.balance} className={negative ? 'text-destructive' : 'text-income'} />
+              </Link>
+            ) : (
+              <Skeleton className="h-12 w-56" />
+            )}
+          </div>
+          {balance.data && <BalanceExtras balance={balance.data.balance} />}
         </div>
         <div className="grid grid-cols-3 gap-3 border-t pt-5">
           <Stat
@@ -376,6 +379,29 @@ function BalanceCard({ label, range, analysis }: { label: string; range: Range; 
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+/** Under the balance: the same balance in the second currency, and how much of it sits in Whish. */
+function BalanceExtras({ balance }: { balance: number }) {
+  const second = useSecondMoney();
+  const money = useMoney();
+  const whish = useWhish();
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground">
+      <span className="tabular">≈ {second(balance)}</span>
+      {whish.data && (whish.data.balance !== 0 || whish.data.transfers.length > 0) && (
+        <Link
+          to="/whish"
+          className="inline-flex min-h-8 items-center gap-1.5 rounded-full border px-2.5 outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        >
+          <img src="/whish-logo.png" alt="" width={16} height={16} className="size-4 rounded-[4px]" />
+          <span>
+            Whish <span className="tabular font-medium text-foreground">{money(whish.data.balance)}</span>
+          </span>
+        </Link>
+      )}
+    </div>
   );
 }
 

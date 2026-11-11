@@ -144,7 +144,7 @@ test('recurring: create, pause, resume and delete', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Edit Gym' })).toHaveCount(0);
 });
 
-test('settings: theme, currency and a new category', async ({ page }) => {
+test('settings: theme, currencies and a new category', async ({ page }) => {
   await login(page);
   await page.getByRole('link', { name: 'Settings' }).click();
 
@@ -153,9 +153,12 @@ test('settings: theme, currency and a new category', async ({ page }) => {
   await page.getByRole('radio', { name: 'Dark' }).click();
   await expect(page.locator('html')).toHaveClass(/dark/);
 
-  await page.getByRole('combobox', { name: 'Currency' }).click();
-  await page.getByRole('option', { name: /^EUR/ }).click();
-  await expect(page.getByText('Currency set to EUR')).toBeVisible();
+  await page.getByRole('radio', { name: /^LBP/ }).click();
+  await expect(page.getByText('Main currency set to LBP')).toBeVisible();
+  const rate = page.getByLabel('Exchange rate');
+  await rate.fill('90,000');
+  await rate.press('Enter');
+  await expect(page.getByText('Rate set to 1 USD = 90,000 LBP')).toBeVisible();
 
   await page.getByRole('link', { name: 'Categories' }).click();
   await page.getByRole('button', { name: 'New Category' }).click();
@@ -171,7 +174,58 @@ test('settings: theme, currency and a new category', async ({ page }) => {
   await page.getByRole('button', { name: 'Add Transaction' }).click();
   const dialog = page.getByRole('dialog', { name: 'New Transaction' });
   await expect(dialog.getByRole('radio', { name: 'Pets' })).toBeVisible();
-  await expect(dialog.getByText('€')).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'LBP' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(dialog.getByText('1 USD = 90,000 LBP')).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  // Back to USD at the default rate for the tests that follow.
+  await page.getByRole('link', { name: 'Settings' }).click();
+  await page.getByRole('radio', { name: /^USD/ }).click();
+  await expect(page.getByText('Main currency set to USD')).toBeVisible();
+  await rate.fill('89500');
+  await rate.press('Enter');
+  await expect(page.getByText('Rate set to 1 USD = 89,500 LBP')).toBeVisible();
+});
+
+test('whish money: top up, send in LBP, pay, guard the balance and withdraw', async ({ page }) => {
+  await login(page);
+  await expect(page.getByRole('heading', { name: /^Good / })).toBeVisible();
+  await page.getByRole('link', { name: 'Whish Money' }).first().click();
+  await expect(page.getByRole('heading', { name: 'Whish Money', level: 1 })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Top Up' }).click();
+  const topUp = page.getByRole('dialog', { name: 'Top Up Whish' });
+  await topUp.getByLabel('Amount').fill('100');
+  await topUp.getByRole('button', { name: 'Top Up', exact: true }).click();
+  await expect(page.getByText('Added $100.00 to Whish')).toBeVisible();
+
+  // Send typed in LBP: converted at the rate and recorded as a Whish expense.
+  await page.getByRole('button', { name: 'Send' }).click();
+  const send = page.getByRole('dialog', { name: 'Send With Whish' });
+  await send.getByRole('button', { name: 'LBP' }).click();
+  await send.getByLabel('Amount').fill('895,000');
+  await expect(send.getByText(/≈ \$10\.00/)).toBeVisible();
+  await send.getByLabel(/Sent to/).fill('Sam');
+  await send.getByRole('button', { name: 'Add Expense' }).click();
+  await expect(page.getByText('Sent $10.00 to Sam')).toBeVisible();
+  await expect(page.getByRole('button', { name: /with Whish Money, to Sam/ }).first()).toBeVisible();
+
+  // The wallet can't go below zero.
+  await page.getByRole('button', { name: 'Pay' }).click();
+  const pay = page.getByRole('dialog', { name: 'Spend With Whish' });
+  await pay.getByLabel('Amount').fill('1000000');
+  await pay.getByRole('button', { name: 'Add Expense' }).click();
+  await expect(page.getByText(/Not enough money in your Whish account/)).toBeVisible();
+  await pay.getByLabel('Amount').fill('20');
+  await pay.getByRole('button', { name: 'Add Expense' }).click();
+  await expect(page.getByText('Expense added')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Withdraw' }).click();
+  const withdraw = page.getByRole('dialog', { name: 'Withdraw From Whish' });
+  await withdraw.getByLabel('Amount').fill('5');
+  await withdraw.getByRole('button', { name: 'Withdraw', exact: true }).click();
+  await expect(page.getByText('Withdrew $5.00 from Whish')).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Withdrawn to cash \$5\.00/ }).first()).toBeVisible();
 });
 
 test('dashboard custom range and history filters', async ({ page }) => {

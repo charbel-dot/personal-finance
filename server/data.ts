@@ -2,6 +2,7 @@ import { DEFAULT_CATEGORIES, DEFAULT_SETTINGS } from '../shared/defaults';
 import { addDays, monthOf, monthsInRange, startOfMonth, todayIn } from '../shared/dates';
 import { generateDue } from '../shared/recurring';
 import { bySavingsDateDesc, savingsBalance } from '../shared/savings';
+import { byTransferDateDesc, whishBalance } from '../shared/whish';
 import {
   categoriesDoc,
   monthFile,
@@ -23,6 +24,12 @@ import {
   type SettingsPatch,
   type Transaction,
   type TransactionInput,
+  type WhishDoc,
+  type WhishInput,
+  type WhishSummary,
+  type WhishTransfer,
+  MAX_WHISH_TRANSFERS,
+  whishDoc,
 } from '../shared/schema';
 import { randomId } from './crypto';
 import { listKeys, readJson, updateJson } from './store';
@@ -33,6 +40,7 @@ export const KEYS = {
   categories: 'categories.json',
   settings: 'settings.json',
   savings: 'savings.json',
+  whish: 'whish.json',
 } as const;
 
 export class NotFoundError extends Error {
@@ -52,6 +60,7 @@ export class ValidationError extends Error {
 const emptyMonth = () => ({ items: [] as Transaction[] });
 const emptyRecurring = () => ({ items: [] as Recurring[] });
 const emptySavings = (): SavingsDoc => ({ items: [], goals: [] });
+const emptyWhish = (): WhishDoc => ({ items: [] });
 const nowIso = () => new Date().toISOString();
 const byDateDesc = (a: Transaction, b: Transaction) =>
   b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt);
@@ -137,6 +146,9 @@ export async function listTransactions(bucket: R2Bucket, from?: string, to?: str
     .sort(byDateDesc);
 }
 
+/** Optional fields the edit form can clear: an omitted value must remove the stored one. */
+const optionalFields = (input: TransactionInput) => ({ note: input.note, account: input.account, to: input.to });
+
 async function rememberCategory(bucket: R2Bucket, input: TransactionInput) {
   await patchSettings(
     bucket,
@@ -146,6 +158,7 @@ async function rememberCategory(bucket: R2Bucket, input: TransactionInput) {
 
 export async function createTransaction(bucket: R2Bucket, input: TransactionInput): Promise<Transaction> {
   await assertCategory(bucket, input.type, input.categoryId);
+  await assertWhishCovers(bucket, input);
   const now = nowIso();
   const tx: Transaction = { ...input, id: randomId('t'), createdAt: now, updatedAt: now };
   await updateJson(bucket, KEYS.month(monthOf(tx.date)), monthFile, emptyMonth, (current) => ({
@@ -163,13 +176,14 @@ export async function updateTransaction(
   input: TransactionInput,
 ): Promise<Transaction> {
   await assertCategory(bucket, input.type, input.categoryId);
+  await assertWhishCovers(bucket, input, id);
   const targetMonth = monthOf(input.date);
 
   if (targetMonth === fromMonth) {
     const { result } = await updateJson(bucket, KEYS.month(fromMonth), monthFile, emptyMonth, (current) => {
       const existing = current.items.find((t) => t.id === id);
       if (!existing) throw new NotFoundError('Transaction');
-      const updated: Transaction = { ...existing, ...input, note: input.note, updatedAt: nowIso() };
+      const updated: Transaction = { ...existing, ...input, ...optionalFields(input), updatedAt: nowIso() };
       return { next: { items: current.items.map((t) => (t.id === id ? updated : t)) }, result: updated };
     });
     if (!result) throw new NotFoundError('Transaction');
@@ -181,7 +195,7 @@ export async function updateTransaction(
     (t) => t.id === id,
   );
   if (!original) throw new NotFoundError('Transaction');
-  const updated: Transaction = { ...original, ...input, note: input.note, updatedAt: nowIso() };
+  const updated: Transaction = { ...original, ...input, ...optionalFields(input), updatedAt: nowIso() };
   await updateJson(bucket, KEYS.month(targetMonth), monthFile, emptyMonth, (current) => ({
     next: { items: [...current.items.filter((t) => t.id !== id), updated] },
     result: undefined,
@@ -431,4 +445,83 @@ export async function deleteGoal(bucket: R2Bucket, id: string): Promise<void> {
     return { next: { items, goals: current.goals.filter((g) => g.id !== id) }, result: undefined };
   });
   if (!changed) throw new NotFoundError('Savings goal');
+}
+
+/* -------------------------------------------------------------------------- whish money */
+
+async function readWhish(bucket: R2Bucket): Promise<WhishDoc> {
+  return (await readJson(bucket, KEYS.whish, whishDoc, emptyWhish)).data;
+}
+
+export async function getWhish(bucket: R2Bucket): Promise<WhishSummary> {
+  const [doc, all] = await Promise.all([readWhish(bucket), listTransactions(bucket)]);
+  return {
+    balance: whishBalance(doc.items, all),
+    transfers: [...doc.items].sort(byTransferDateDesc),
+    transactions: all.filter((t) => t.account === 'whish'),
+  };
+}
+
+/**
+ * A Whish wallet can't go below zero. Checked against the balance with this change applied
+ * (and the edited transaction or transfer left out).
+ */
+async function assertWhishBalance(
+  bucket: R2Bucket,
+  change: { transfer?: WhishInput; transaction?: TransactionInput },
+  exclude?: string,
+) {
+  const [doc, all] = await Promise.all([readWhish(bucket), listTransactions(bucket)]);
+  const transfers = [...doc.items.filter((e) => e.id !== exclude), ...(change.transfer ? [change.transfer] : [])];
+  const transactions = [...all.filter((t) => t.id !== exclude), ...(change.transaction ? [change.transaction] : [])];
+  if (whishBalance(transfers, transactions) < 0) {
+    throw new ValidationError('Not enough money in your Whish account. Top it up first.');
+  }
+}
+
+/** Only Whish expenses (and edits that take money out of Whish) can overdraw the wallet. */
+async function assertWhishCovers(bucket: R2Bucket, input: TransactionInput, editingId?: string) {
+  if (editingId) {
+    // Editing anything that was or becomes a Whish entry changes the balance either way.
+    const all = await listTransactions(bucket);
+    const before = all.find((t) => t.id === editingId);
+    if (input.account !== 'whish' && before?.account !== 'whish') return;
+  } else if (input.account !== 'whish' || input.type !== 'expense') {
+    return;
+  }
+  await assertWhishBalance(bucket, { transaction: input }, editingId);
+}
+
+export async function createWhishTransfer(bucket: R2Bucket, input: WhishInput): Promise<WhishTransfer> {
+  if (input.kind === 'withdrawal') await assertWhishBalance(bucket, { transfer: input });
+  const now = nowIso();
+  const entry: WhishTransfer = { ...input, id: randomId('w'), createdAt: now, updatedAt: now };
+  await updateJson(bucket, KEYS.whish, whishDoc, emptyWhish, (current) => {
+    if (current.items.length >= MAX_WHISH_TRANSFERS) throw new ValidationError('Too many Whish transfers');
+    return { next: { items: [...current.items, entry] }, result: undefined };
+  });
+  return entry;
+}
+
+export async function updateWhishTransfer(bucket: R2Bucket, id: string, input: WhishInput): Promise<WhishTransfer> {
+  await assertWhishBalance(bucket, { transfer: input }, id);
+  const { result } = await updateJson(bucket, KEYS.whish, whishDoc, emptyWhish, (current) => {
+    const existing = current.items.find((e) => e.id === id);
+    if (!existing) throw new NotFoundError('Whish transfer');
+    const updated: WhishTransfer = { ...existing, ...input, note: input.note, updatedAt: nowIso() };
+    return { next: { items: current.items.map((e) => (e.id === id ? updated : e)) }, result: updated };
+  });
+  if (!result) throw new NotFoundError('Whish transfer');
+  return result;
+}
+
+export async function deleteWhishTransfer(bucket: R2Bucket, id: string): Promise<void> {
+  // Removing a top-up lowers the balance, so it must still cover what was spent.
+  await assertWhishBalance(bucket, {}, id);
+  const { changed } = await updateJson(bucket, KEYS.whish, whishDoc, emptyWhish, (current) =>
+    current.items.some((e) => e.id === id)
+      ? { next: { items: current.items.filter((e) => e.id !== id) }, result: undefined }
+      : undefined,
+  );
+  if (!changed) throw new NotFoundError('Whish transfer');
 }

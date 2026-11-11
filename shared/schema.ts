@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CURRENCIES, DEFAULT_USD_RATE, MAX_USD_RATE } from './money';
 
 /** ISO calendar date, e.g. 2026-11-09. */
 export const isoDate = z
@@ -19,17 +20,28 @@ export const id = z
   .max(80)
   .regex(/^[A-Za-z0-9_-]+$/, 'Invalid id');
 
-/** Amounts are stored as integer minor units (cents). Max 1 billion major units. */
+/**
+ * Largest amount in minor units: 1 trillion major units (about $11M in LBP), so totals
+ * of any realistic ledger stay inside Number.MAX_SAFE_INTEGER.
+ */
+export const MAX_AMOUNT_CENTS = 100_000_000_000_000;
+
+/** Amounts are stored as integer minor units (cents). */
 export const amountCents = z
   .number()
   .int('Amount must be in cents')
   .positive('Amount must be greater than zero')
-  .max(100_000_000_000, 'Amount is too large');
+  .max(MAX_AMOUNT_CENTS, 'Amount is too large');
 
 const note = z.string().trim().max(280, 'Note is too long').optional();
 
 export const transactionType = z.enum(['income', 'expense']);
 export type TransactionType = z.infer<typeof transactionType>;
+
+/** Where money moves through: cash (the default) or the Whish Money wallet. */
+export const ACCOUNTS = ['cash', 'whish'] as const;
+export const account = z.enum(ACCOUNTS);
+export type Account = z.infer<typeof account>;
 
 export const transactionInput = z.object({
   type: transactionType,
@@ -37,6 +49,10 @@ export const transactionInput = z.object({
   categoryId: id,
   date: isoDate,
   note,
+  /** Added in 1.6.0; absent means cash. */
+  account: account.optional(),
+  /** Who the money was sent to (Whish sends). */
+  to: z.string().trim().max(60, 'Name is too long').optional(),
 });
 export type TransactionInput = z.infer<typeof transactionInput>;
 
@@ -159,7 +175,48 @@ export const savingsDoc = z.object({
 });
 export type SavingsDoc = z.infer<typeof savingsDoc>;
 
-export const currencyCode = z.string().regex(/^[A-Z]{3}$/, 'Invalid currency');
+/* ------------------------------------------------------------------------ whish money */
+
+/** Money moved from cash into the Whish wallet (deposit) or cashed out of it (withdrawal). */
+export const whishKind = z.enum(['deposit', 'withdrawal']);
+export type WhishKind = z.infer<typeof whishKind>;
+
+export const whishInput = z.object({
+  kind: whishKind,
+  amount: amountCents,
+  date: isoDate,
+  note,
+});
+export type WhishInput = z.infer<typeof whishInput>;
+
+export const whishTransfer = whishInput.extend({
+  id,
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type WhishTransfer = z.infer<typeof whishTransfer>;
+
+export const MAX_WHISH_TRANSFERS = 5000;
+export const whishDoc = z.object({ items: z.array(whishTransfer).max(MAX_WHISH_TRANSFERS) });
+export type WhishDoc = z.infer<typeof whishDoc>;
+
+/** Everything the Whish Money page shows. */
+export interface WhishSummary {
+  /** Top-ups − withdrawals + Whish income − Whish expenses, in cents. */
+  balance: number;
+  transfers: WhishTransfer[];
+  /** Transactions paid or received through Whish, newest first. */
+  transactions: Transaction[];
+}
+
+export const currencyCode = z.enum(CURRENCIES, { error: 'Use USD or LBP' });
+
+/** Lebanese pounds per US dollar. */
+export const usdRate = z
+  .number()
+  .int('Use a whole number of pounds')
+  .min(1, 'Enter a rate above zero')
+  .max(MAX_USD_RATE, 'That rate is too large');
 
 const percent = z.number().int('Use whole percentages').min(0).max(100);
 
@@ -171,11 +228,18 @@ export type BudgetRule = z.infer<typeof budgetRule>;
 export const DEFAULT_BUDGET_RULE: BudgetRule = { needs: 50, wants: 30, savings: 20 };
 
 const settingsBase = z.object({
+  /**
+   * Currency every amount is stored in. Fixed per account (changing it would relabel existing
+   * data), so it is never patched; switching what the user sees is `displayCurrency`'s job.
+   */
   currency: currencyCode,
+  /** Currency amounts are shown and typed in; converted from `currency` at `usdRate`. */
+  displayCurrency: currencyCode,
+  usdRate,
   /** IANA timezone used to decide what "today" is for recurring generation. */
   timezone: z.string().min(1).max(64),
   /** Starting balance (cents, may be negative) added to the all-time balance. */
-  openingBalance: z.number().int().min(-100_000_000_000).max(100_000_000_000),
+  openingBalance: z.number().int().min(-MAX_AMOUNT_CENTS).max(MAX_AMOUNT_CENTS),
   lastExpenseCategoryId: id.optional(),
   lastIncomeCategoryId: id.optional(),
   budgetRule,
@@ -187,6 +251,11 @@ const settingsBase = z.object({
 
 /** Stored settings. Fields added later get defaults so older settings.json files still load. */
 export const settings = settingsBase.extend({
+  /** Accounts created before 1.6.0 may hold another code; their amounts are treated as USD. */
+  currency: z.preprocess((v) => (v === 'LBP' ? 'LBP' : 'USD'), currencyCode),
+  /** Added in 1.6.0: older settings show amounts in the stored currency (resolved by the client). */
+  displayCurrency: currencyCode.optional(),
+  usdRate: usdRate.default(DEFAULT_USD_RATE),
   budgetRule: budgetRule.default(DEFAULT_BUDGET_RULE),
   autoSplit: z.boolean().default(true),
   tourDone: z.boolean().default(false),
@@ -194,7 +263,7 @@ export const settings = settingsBase.extend({
 export type Settings = z.infer<typeof settings>;
 
 /** Partial update: no defaults here, so omitted fields are never reset. */
-export const settingsPatch = settingsBase.partial();
+export const settingsPatch = settingsBase.omit({ currency: true }).partial();
 export type SettingsPatch = z.infer<typeof settingsPatch>;
 
 export const loginInput = z.object({

@@ -16,9 +16,9 @@ export function parseAmount(input: string): number | null {
   return Number.isFinite(cents) && cents > 0 ? cents : null;
 }
 
-/** Cents → plain decimal string suitable for an input value ("1234.5" → "1234.50"). */
-export function centsToInput(cents: number): string {
-  return (cents / 100).toFixed(2);
+/** Cents → plain string for an input value: "1234.50" in USD, whole pounds ("150000") in LBP. */
+export function centsToInput(cents: number, currency: Currency = 'USD'): string {
+  return currency === 'LBP' ? String(Math.round(cents / 100)) : (cents / 100).toFixed(2);
 }
 
 const formatters = new Map<string, Intl.NumberFormat>();
@@ -36,7 +36,7 @@ export function formatMoney(
         style: 'currency',
         currency,
         notation: options.compact ? 'compact' : 'standard',
-        maximumFractionDigits: options.compact ? 1 : 2,
+        maximumFractionDigits: options.compact ? 1 : currency === 'LBP' ? 0 : 2,
         signDisplay: options.signed ? 'exceptZero' : 'auto',
       });
     } catch {
@@ -54,29 +54,33 @@ export function formatPercent(ratio: number, digits = 0): string {
   }).format(Number.isFinite(ratio) ? ratio : 0);
 }
 
-export const CURRENCIES = [
-  'USD',
-  'EUR',
-  'GBP',
-  'CAD',
-  'AUD',
-  'CHF',
-  'JPY',
-  'CNY',
-  'INR',
-  'AED',
-  'SAR',
-  'LBP',
-  'EGP',
-  'TRY',
-  'BRL',
-  'MXN',
-  'ZAR',
-  'SEK',
-  'NOK',
-  'DKK',
-  'PLN',
-  'SGD',
-  'HKD',
-  'NZD',
-] as const;
+/** The only two currencies the app works in. */
+export const CURRENCIES = ['USD', 'LBP'] as const;
+export type Currency = (typeof CURRENCIES)[number];
+
+/** Lebanese pounds per US dollar used when nothing has been set yet. */
+export const DEFAULT_USD_RATE = 89_500;
+export const MAX_USD_RATE = 10_000_000;
+
+/**
+ * Converts an amount in minor units between USD and LBP at `rate` LBP per USD.
+ * Same-currency conversions return the amount untouched.
+ */
+export function convertCents(cents: number, from: Currency, to: Currency, rate: number): number {
+  if (from === to) return cents;
+  return from === 'USD' ? Math.round(cents * rate) : Math.round(cents / rate);
+}
+
+/**
+ * Amounts converted into LBP are rounded to the nearest 1,000 LBP (minor units: 100,000) for
+ * display. Lebanese prices are quoted in thousands, and it hides the sub-cent noise of converting
+ * a USD-cent amount back (at most ±0.5¢ × rate, i.e. under 500 LBP at today's rates).
+ */
+export function roundLbp(cents: number): number {
+  return Math.round(cents / 100_000) * 100_000;
+}
+
+/** Parses an amount typed in `currency`. LBP has no fractions, so dots and commas are separators. */
+export function parseAmountIn(input: string, currency: Currency): number | null {
+  return parseAmount(currency === 'LBP' ? input.replace(/[.,]/g, '') : input);
+}

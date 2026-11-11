@@ -17,7 +17,9 @@ import { useId, useMemo, useState, type CSSProperties, type ReactNode, type Synt
 import { toast } from 'sonner';
 import { CATEGORY_COLORS } from '../../shared/defaults';
 import { endOfMonth, isValidIsoDate, startOfMonth } from '../../shared/dates';
-import { centsToInput, formatPercent, parseAmount } from '../../shared/money';
+import { formatPercent } from '../../shared/money';
+import { MoneyInput } from '@/components/MoneyField';
+import { useMoneyField } from '@/hooks/use-money-field';
 import { goalProgress, savingsBalance, signedAmount, summarizeSavings, type GoalProgress } from '../../shared/savings';
 import type { Category, SavingsEntry, SavingsGoal, SavingsKind } from '../../shared/schema';
 import { CategoryPicker } from '@/components/CategoryPicker';
@@ -33,7 +35,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { useConfirm } from '@/context/confirm';
 import { useUrlState } from '@/hooks/use-url-state';
-import { currencySymbol, formatDate, useMoney } from '@/lib/format';
+import { formatDate, useMoney } from '@/lib/format';
 import {
   useAppData,
   useDeleteGoal,
@@ -721,7 +723,6 @@ function savingsDefaults(
   if (entry) {
     return {
       kind: entry.kind,
-      amount: centsToInput(entry.amount),
       sourceId: entry.sourceId,
       goalId: entry.goalId ?? NO_GOAL,
       date: entry.date,
@@ -730,7 +731,6 @@ function savingsDefaults(
   }
   return {
     kind: fallback.kind ?? 'deposit',
-    amount: '',
     sourceId: fallback.sourceId,
     goalId: fallback.goalId ?? NO_GOAL,
     date: localToday(),
@@ -844,7 +844,7 @@ function SavingsForm({
   const save = useSaveSavings();
   const remove = useDeleteSavings();
   const confirm = useConfirm();
-  const ids = { amount: useId(), date: useId(), note: useId(), goal: useId() };
+  const ids = { amount: useId(), amountHint: useId(), date: useId(), note: useId(), goal: useId() };
   const sources = categories.income.filter((c) => !c.archived || c.id === entry?.sourceId);
 
   const [initial] = useState(() =>
@@ -855,7 +855,7 @@ function SavingsForm({
     }),
   );
   const [kind, setKind] = useState<SavingsKind>(initial.kind);
-  const [amount, setAmount] = useState(initial.amount);
+  const amount = useMoneyField(entry?.amount);
   const [sourceId, setSourceId] = useState(initial.sourceId);
   const [goalId, setGoalId] = useState(initial.goalId);
   const [date, setDate] = useState(initial.date);
@@ -866,7 +866,7 @@ function SavingsForm({
 
   async function onSubmit(e: SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
-    const cents = parseAmount(amount);
+    const cents = amount.stored();
     const next = validateSavings({ cents, kind, limit, sourceId, date, money });
     setErrors(next);
     if (cents === null || Object.keys(next).length > 0) {
@@ -922,20 +922,8 @@ function SavingsForm({
   return (
     <form className="space-y-5 pt-1" onSubmit={(e) => void onSubmit(e)} noValidate>
       <KindSwitch value={kind} onChange={setKind} />
-      <Field id={ids.amount} label={`Amount (${currencySymbol(settings.currency)})`} error={errors.amount}>
-        <Input
-          id={ids.amount}
-          className="tabular text-lg"
-          name="amount"
-          inputMode="decimal"
-          autoComplete="off"
-          placeholder="0.00"
-          value={amount}
-          maxLength={16}
-          data-autofocus={entry ? undefined : true}
-          aria-invalid={Boolean(errors.amount)}
-          onChange={(e) => setAmount(e.target.value.replace(/[^\d.,]/g, ''))}
-        />
+      <Field id={ids.amount} label="Amount" error={errors.amount}>
+        <MoneyInput id={ids.amount} hintId={ids.amountHint} name="amount" field={amount} error={errors.amount} />
         <WithdrawHint show={kind === 'withdrawal' && !errors.amount} available={money(Math.max(0, limit))} />
       </Field>
       <CategoryPicker
@@ -983,18 +971,17 @@ function SavingsForm({
 }
 
 function GoalForm({ goal, onDone }: { goal?: SavingsGoal; onDone: () => void }) {
-  const { settings } = useAppData();
   const save = useSaveGoal();
-  const ids = { name: useId(), target: useId(), date: useId() };
+  const ids = { name: useId(), target: useId(), targetHint: useId(), date: useId() };
   const [name, setName] = useState(goal?.name ?? '');
-  const [target, setTarget] = useState(goal ? centsToInput(goal.target) : '');
+  const target = useMoneyField(goal?.target);
   const [targetDate, setTargetDate] = useState(goal?.targetDate ?? '');
   const [color, setColor] = useState(goal?.color ?? CATEGORY_COLORS[0]);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   async function onSubmit(e: SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
-    const cents = parseAmount(target);
+    const cents = target.stored();
     const next: Record<string, string> = {};
     if (!name.trim()) next.name = 'Give it a name';
     if (cents === null) next.target = 'Enter a target greater than zero';
@@ -1031,20 +1018,9 @@ function GoalForm({ goal, onDone }: { goal?: SavingsGoal; onDone: () => void }) 
           onChange={(e) => setName(e.target.value)}
         />
       </Field>
-      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3">
-        <Field id={ids.target} label={`Target (${currencySymbol(settings.currency)})`} error={errors.target}>
-          <Input
-            id={ids.target}
-            className="tabular"
-            name="target"
-            inputMode="decimal"
-            autoComplete="off"
-            placeholder="0.00"
-            maxLength={16}
-            value={target}
-            aria-invalid={Boolean(errors.target)}
-            onChange={(e) => setTarget(e.target.value.replace(/[^\d.,]/g, ''))}
-          />
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] sm:items-start">
+        <Field id={ids.target} label="Target" error={errors.target}>
+          <MoneyInput id={ids.target} hintId={ids.targetHint} name="target" field={target} error={errors.target} />
         </Field>
         <Field id={ids.date} label="By (optional)" error={errors.date}>
           <Input

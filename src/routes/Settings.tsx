@@ -2,19 +2,21 @@ import { ChevronRight, LogOut, Monitor, Moon, PlayCircle, Sun } from 'lucide-rea
 import { Link } from 'react-router';
 import { useId, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
-import { CURRENCIES, centsToInput } from '../../shared/money';
+import { CURRENCIES, MAX_USD_RATE, convertCents, parseAmountIn, type Currency } from '../../shared/money';
+import { MoneyInput } from '@/components/MoneyField';
 import { BudgetRuleCard } from '@/components/BudgetRuleCard';
 import { Page, PageHeader } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Segmented } from '@/components/Segmented';
+import { useMoneyField } from '@/hooks/use-money-field';
 import { useSignOut } from '@/hooks/use-sign-out';
-import { currencySymbol } from '@/lib/format';
+import { currencySymbol, formatRate, useCurrency } from '@/lib/format';
 import { useAppData, usePatchSettings } from '@/lib/queries';
 import { useTheme, type ThemePref } from '@/lib/theme';
+
+const rateFmt = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
 
 const THEMES: { value: ThemePref; label: string; icon: typeof Sun }[] = [
   { value: 'system', label: 'System', icon: Monitor },
@@ -52,8 +54,11 @@ export default function Settings() {
   const patch = usePatchSettings();
   const signOut = useSignOut();
   const [theme, setTheme] = useTheme();
-  const [opening, setOpening] = useState(() => centsToInput(settings.openingBalance));
-  const ids = { currency: useId(), opening: useId() };
+  const { ledger, display, rate } = useCurrency();
+  const opening = useMoneyField(settings.openingBalance);
+  const [rateText, setRateText] = useState(() => rateFmt.format(rate));
+  const ids = { rate: useId(), opening: useId(), openingHint: useId() };
+  const second: Currency = display === 'USD' ? 'LBP' : 'USD';
 
   async function update(p: Parameters<typeof patch.mutateAsync>[0], message: string) {
     try {
@@ -64,13 +69,30 @@ export default function Settings() {
     }
   }
 
-  function saveOpening() {
-    const trimmed = opening.trim().replace(',', '.') || '0';
-    if (!/^-?\d+(\.\d{0,2})?$/.test(trimmed)) {
-      toast.error('Enter a valid opening balance, like 1250.00');
+  function saveRate() {
+    const next = Number(rateText.replace(/[^\d]/g, ''));
+    if (!Number.isInteger(next) || next < 1 || next > MAX_USD_RATE) {
+      toast.error('Enter how many Lebanese pounds one US dollar buys, like 89,500');
+      setRateText(rateFmt.format(rate));
       return;
     }
-    const cents = Math.round(Number(trimmed) * 100);
+    setRateText(rateFmt.format(next));
+    if (next !== rate) void update({ usdRate: next }, `Rate set to ${formatRate(next)}`);
+  }
+
+  function saveOpening() {
+    if (!opening.dirty) return;
+    const negative = opening.value.trim().startsWith('-');
+    const digits = opening.value.replace(/-/g, '').trim();
+    let cents = 0;
+    if (digits && !/^[0.,]+$/.test(digits)) {
+      const typed = parseAmountIn(digits, opening.currency);
+      if (typed === null) {
+        toast.error('Enter a valid opening balance, like 1250.00');
+        return;
+      }
+      cents = convertCents(typed, opening.currency, ledger, rate) * (negative ? -1 : 1);
+    }
     if (cents !== settings.openingBalance) void update({ openingBalance: cents }, 'Opening balance saved');
   }
 
@@ -99,37 +121,58 @@ export default function Settings() {
                 }))}
               />
             </Row>
-            <Row label="Currency" htmlFor={ids.currency}>
-              <Select
-                value={settings.currency}
-                onValueChange={(v) => void update({ currency: v }, `Currency set to ${v}`)}
-              >
-                <SelectTrigger id={ids.currency} className="h-10 w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CURRENCIES.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {c} · {currencySymbol(c)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Currencies</CardTitle>
+            <CardDescription>
+              Type any amount in USD or LBP. Totals show in your main currency, converted at your rate.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="divide-y">
+            <Row label="Main currency" hint={`Your second currency, ${second}, is shown under key totals.`}>
+              <Segmented
+                fill
+                aria-label="Main currency"
+                value={display}
+                onValueChange={(v) => void update({ displayCurrency: v }, `Main currency set to ${v}`)}
+                items={CURRENCIES.map((c) => ({ value: c, label: `${c} · ${currencySymbol(c)}` }))}
+              />
+            </Row>
+            <Row
+              label="Exchange rate"
+              hint="Lebanese pounds for one US dollar. Update it when the rate moves."
+              htmlFor={ids.rate}
+            >
+              <div className="flex h-10 items-center gap-2 rounded-md border px-3 shadow-xs focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30">
+                <span className="shrink-0 text-sm text-muted-foreground">1 USD =</span>
+                <input
+                  id={ids.rate}
+                  name="usdRate"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  maxLength={12}
+                  value={rateText}
+                  onChange={(e) => setRateText(e.target.value.replace(/[^\d,.\s]/g, ''))}
+                  onBlur={saveRate}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') e.currentTarget.blur();
+                  }}
+                  className="tabular h-full w-full min-w-0 bg-transparent text-right text-base outline-none md:text-sm"
+                />
+                <span className="shrink-0 text-sm text-muted-foreground">LBP</span>
+              </div>
             </Row>
             <Row label="Opening balance" hint="Money you had before you started tracking." htmlFor={ids.opening}>
-              <Input
+              <MoneyInput
                 id={ids.opening}
-                className="tabular h-10"
+                hintId={ids.openingHint}
                 name="openingBalance"
-                autoComplete="off"
-                placeholder="0.00"
-                inputMode="decimal"
-                value={opening}
-                onChange={(e) => setOpening(e.target.value.replace(/[^\d.,-]/g, ''))}
+                field={opening}
+                allowNegative
                 onBlur={saveOpening}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') e.currentTarget.blur();
-                }}
               />
             </Row>
           </CardContent>

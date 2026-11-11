@@ -4,7 +4,8 @@ import { useId, useState, type CSSProperties, type ReactNode, type SyntheticEven
 import { useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import { isValidIsoDate } from '../../shared/dates';
-import { centsToInput, parseAmount } from '../../shared/money';
+import { MoneyInput } from '@/components/MoneyField';
+import { useMoneyField } from '@/hooks/use-money-field';
 import { monthlyEquivalent, nextDueDate } from '../../shared/recurring';
 import type { Category, Frequency, Recurring as Rule, RecurringInput, TransactionType } from '../../shared/schema';
 import { CategoryPicker } from '@/components/CategoryPicker';
@@ -19,7 +20,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useConfirm } from '@/context/confirm';
-import { currencySymbol, formatDate, useMoney } from '@/lib/format';
+import { formatDate, useMoney } from '@/lib/format';
 import { useAppData, useDeleteRecurring, useSaveRecurring } from '@/lib/queries';
 import { localToday } from '@/lib/today';
 import { cn } from '@/lib/utils';
@@ -264,14 +265,14 @@ function focusFirstError(errors: Record<string, string>, ids: { name: string; am
 }
 
 function RecurringForm({ rule, onDone }: { rule?: Rule; onDone: () => void }) {
-  const { categories, settings } = useAppData();
+  const { categories } = useAppData();
   const save = useSaveRecurring();
-  const ids = { name: useId(), amount: useId(), freq: useId(), start: useId(), note: useId() };
+  const ids = { name: useId(), amount: useId(), amountHint: useId(), freq: useId(), start: useId(), note: useId() };
   const [type, setType] = useState<TransactionType>(rule?.type ?? 'expense');
   const cats = (t: TransactionType) => categories[t].filter((c) => !c.archived || c.id === rule?.categoryId);
 
   const [name, setName] = useState(rule?.name ?? '');
-  const [amount, setAmount] = useState(rule ? centsToInput(rule.amount) : '');
+  const amount = useMoneyField(rule?.amount);
   const [categoryByType, setCategoryByType] = useState<Record<TransactionType, string>>(() => ({
     expense: initialCategory(rule, 'expense', cats('expense'), 'subscriptions'),
     income: initialCategory(rule, 'income', cats('income'), 'salary'),
@@ -284,7 +285,7 @@ function RecurringForm({ rule, onDone }: { rule?: Rule; onDone: () => void }) {
 
   async function onSubmit(e: SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
-    const cents = parseAmount(amount);
+    const cents = amount.stored();
     const next = validateRule({ name, cents, categoryId, startDate, type });
     setErrors(next);
     if (cents === null || Object.keys(next).length > 0) {
@@ -330,20 +331,9 @@ function RecurringForm({ rule, onDone }: { rule?: Rule; onDone: () => void }) {
           className="h-11"
         />
       </Field>
-      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3">
-        <Field id={ids.amount} label={`Amount (${currencySymbol(settings.currency)})`} error={errors.amount}>
-          <Input
-            id={ids.amount}
-            className="tabular h-11"
-            name="amount"
-            inputMode="decimal"
-            autoComplete="off"
-            placeholder="0.00"
-            value={amount}
-            maxLength={16}
-            aria-invalid={Boolean(errors.amount)}
-            onChange={(e) => setAmount(e.target.value.replace(/[^\d.,]/g, ''))}
-          />
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] sm:items-start">
+        <Field id={ids.amount} label="Amount" error={errors.amount}>
+          <MoneyInput id={ids.amount} hintId={ids.amountHint} name="amount" field={amount} error={errors.amount} />
         </Field>
         <Field id={ids.freq} label="Repeats">
           <Select value={frequency} onValueChange={(v) => setFrequency(v as Frequency)}>

@@ -20,6 +20,7 @@ const routes = {
   settings: () => import('./routes/Settings'),
   categories: () => import('./routes/Categories'),
   account: () => import('./routes/Account'),
+  whish: () => import('./routes/Whish'),
 };
 const Login = lazy(() => import('./routes/Login'));
 const Dashboard = lazy(routes.dashboard);
@@ -29,6 +30,7 @@ const Savings = lazy(routes.savings);
 const Settings = lazy(routes.settings);
 const Categories = lazy(routes.categories);
 const Account = lazy(routes.account);
+const Whish = lazy(routes.whish);
 
 /**
  * A few seconds after the first screen is up, fetch the other pages' code (and the chart library)
@@ -118,6 +120,7 @@ export function App() {
                 <Route path="history" element={<History />} />
                 <Route path="recurring" element={<Recurring />} />
                 <Route path="savings" element={<Savings />} />
+                <Route path="whish" element={<Whish />} />
                 <Route path="categories" element={<Categories />} />
                 <Route path="account" element={<Account />} />
                 <Route path="settings" element={<Settings />} />

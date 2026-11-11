@@ -1,8 +1,15 @@
 import { createContext, use } from 'react';
-import type { Transaction, TransactionType } from '../../shared/schema';
+import type { Account, Transaction, TransactionType } from '../../shared/schema';
+
+export interface QuickAddOptions {
+  /** Pre-select where the money moves through (default: cash). */
+  account?: Account;
+  /** Open as a Whish "send": asks who the money goes to. */
+  send?: boolean;
+}
 
 export interface QuickAddApi {
-  openNew: (type?: TransactionType) => void;
+  openNew: (type?: TransactionType, options?: QuickAddOptions) => void;
   openEdit: (transaction: Transaction) => void;
 }
 

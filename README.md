@@ -46,6 +46,16 @@ Browser ──► Cloudflare Pages ── static SPA (dist/)
 - **Savings goals**: name a target (and optionally a date), add savings towards it, and see a progress
   ring plus how much to put aside each month to get there. Goal cards and source rows filter the
   savings history; deleting a goal keeps the money and just untags its entries.
+- **USD and LBP**: pick a main currency (USD or LBP) and set the rate (1 USD = N LBP) in Settings.
+  Every amount field has a USD | LBP switch with a live conversion, so expenses, income, recurring
+  entries, savings, goals and the opening balance can all be typed in either currency. Totals and rows
+  show the main currency with the second currency underneath. Amounts are stored in the account's
+  base currency and converted for display; converted LBP is rounded to the nearest 1,000.
+- **Whish Money**: a wallet page with your Whish balance. Top up from cash, withdraw back to cash,
+  send (with who it went to) or pay with Whish. Sends and payments are normal expenses marked as paid
+  with Whish, so they still count in budgets; top-ups and withdrawals just move money between cash and
+  Whish. Any transaction can be marked as paid with or received in Whish, and the server never lets the
+  Whish balance go below zero.
 - **Everything is a link**: dashboard figures, tips, budget buckets, chart cards, upcoming bills and
   account stats open the filtered History, Savings, Recurring or Categories page they describe.
 - **Liquid glass UI**: buttons, inputs, switches, segmented controls, menus and the phone tab bar use

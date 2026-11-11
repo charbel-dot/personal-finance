@@ -74,12 +74,12 @@ describe('users', () => {
 
     await createTransaction(owner, expense(1000));
     await createTransaction(samDb, expense(2000));
-    await patchSettings(samDb, { currency: 'EUR', tourDone: true });
+    await patchSettings(samDb, { displayCurrency: 'LBP', tourDone: true });
 
     expect((await listTransactions(owner)).map((t) => t.amount)).toEqual([1000]);
     expect((await listTransactions(samDb)).map((t) => t.amount)).toEqual([2000]);
     expect(await listTransactions(alexDb)).toEqual([]);
-    expect((await getSettings(samDb)).currency).toBe('EUR');
+    expect((await getSettings(samDb)).displayCurrency).toBe('LBP');
     expect(await getSettings(alexDb)).toMatchObject({ currency: 'USD', tourDone: false });
     expect(await getSettings(owner)).toMatchObject({ currency: 'USD', tourDone: false });
     // The owner's files stay at the root, exactly where single-user data always was.

@@ -1,16 +1,5 @@
-import {
-  CircleUserRound,
-  History,
-  House,
-  LogOut,
-  PiggyBank,
-  Plus,
-  Repeat,
-  Settings,
-  Tags,
-  type LucideIcon,
-} from 'lucide-react';
-import { Suspense, useEffect, type ReactNode } from 'react';
+import { CircleUserRound, History, House, LogOut, PiggyBank, Plus, Repeat, Settings, Tags } from 'lucide-react';
+import { Suspense, useEffect, type ComponentType, type ReactNode } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router';
 import { Button as GlassButton } from 'glisse';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -23,17 +12,23 @@ import { useQuickAdd } from '@/context/quickAdd';
 import { useSignOut } from '@/hooks/use-sign-out';
 import { cn } from '@/lib/utils';
 
-const NAV: { to: string; label: string; icon: LucideIcon }[] = [
+/** The Whish Money logo, sized like the line icons it sits next to. */
+function WhishIcon({ className }: { className?: string }) {
+  return <img src="/whish-logo.png" alt="" width={20} height={20} className={cn('size-5 rounded-[5px]', className)} />;
+}
+
+const NAV: { to: string; label: string; icon: ComponentType<{ className?: string }> }[] = [
   { to: '/', label: 'Home', icon: House },
   { to: '/history', label: 'History', icon: History },
   { to: '/recurring', label: 'Recurring', icon: Repeat },
   { to: '/savings', label: 'Savings', icon: PiggyBank },
+  { to: '/whish', label: 'Whish Money', icon: WhishIcon },
   { to: '/categories', label: 'Categories', icon: Tags },
   { to: '/account', label: 'Account', icon: CircleUserRound },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 /** Phone top bar: the destinations that don't fit in the bottom bar. */
-const TOP_NAV = ['/categories', '/account', '/settings'];
+const TOP_NAV = ['/whish', '/categories', '/account', '/settings'];
 /** Phone bottom bar: four destinations around the add button. */
 const BOTTOM_NAV = NAV.filter((n) => !TOP_NAV.includes(n.to));
 /** Desktop sidebar: account and settings sit at the foot, above Sign Out. */
