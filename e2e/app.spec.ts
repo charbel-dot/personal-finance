@@ -224,7 +224,9 @@ test('whish money: top up, send in LBP, pay, guard the balance and withdraw', as
   await page.getByRole('button', { name: 'Send' }).click();
   const send = page.getByRole('dialog', { name: 'Send With Whish' });
   await send.getByRole('button', { name: 'LBP' }).click();
-  await send.getByLabel('Amount').fill('895,000');
+  await send.getByLabel('Amount').fill('895000');
+  // Amounts get thousands separators as you type.
+  await expect(send.getByLabel('Amount')).toHaveValue('895,000');
   await expect(send.getByText(/≈ \$10\.00/)).toBeVisible();
   await send.getByLabel(/Sent to/).fill('Sam');
   await send.getByRole('button', { name: 'Add Expense' }).click();
@@ -241,17 +243,18 @@ test('whish money: top up, send in LBP, pay, guard the balance and withdraw', as
   await pay.getByRole('button', { name: 'Add Expense' }).click();
   await expect(page.getByText('Expense added')).toBeVisible();
 
-  // Withdrawing moves the money back into Current Balance.
+  // Withdrawing moves the money back into Current Balance; Whish keeps a 1% fee.
   const balanceBefore = (await (await page.request.get('/api/balance')).json()) as { balance: number; whish: number };
   await page.getByRole('button', { name: 'Withdraw' }).click();
   const withdraw = page.getByRole('dialog', { name: 'Withdraw From Whish' });
   await withdraw.getByLabel('Amount').fill('5');
+  await expect(withdraw.getByText('Whish fee (1%): $0.05 · $5.05 leaves your wallet')).toBeVisible();
   await withdraw.getByRole('button', { name: 'Withdraw', exact: true }).click();
-  await expect(page.getByText('Withdrew $5.00 from Whish')).toBeVisible();
-  await expect(page.getByRole('button', { name: /^Withdrawn to cash \$5\.00/ }).first()).toBeVisible();
+  await expect(page.getByText('Withdrew $5.00 from Whish ($0.05 fee)')).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Withdrawn to cash \$5\.00 plus \$0\.05 fee/ }).first()).toBeVisible();
   const balanceAfter = (await (await page.request.get('/api/balance')).json()) as { balance: number; whish: number };
   expect(balanceAfter.balance - balanceBefore.balance).toBe(500);
-  expect(balanceAfter.whish - balanceBefore.whish).toBe(-500);
+  expect(balanceAfter.whish - balanceBefore.whish).toBe(-505);
 
   // LBP is written as the plain code, never L£ (Intl puts a non-breaking space after it).
   await expect(page.getByText(/LBP\s[\d,]+/).first()).toBeVisible();

@@ -2,7 +2,7 @@ import { DEFAULT_CATEGORIES, DEFAULT_SETTINGS } from '../shared/defaults';
 import { addDays, monthOf, monthsInRange, startOfMonth, todayIn } from '../shared/dates';
 import { generateDue } from '../shared/recurring';
 import { bySavingsDateDesc, savingsBalance } from '../shared/savings';
-import { byTransferDateDesc, whishBalance } from '../shared/whish';
+import { byTransferDateDesc, whishBalance, whishFees, whishWithdrawalFee } from '../shared/whish';
 import {
   categoriesDoc,
   monthFile,
@@ -222,7 +222,8 @@ export async function deleteTransaction(bucket: R2Bucket, id: string, month: str
 /**
  * All-time totals. `balance` is the money you hold outside Whish: opening balance + income − expenses,
  * minus what sits in the Whish wallet. Topping Whish up moves money out of it; withdrawing from Whish
- * moves it back in. `whish` is the wallet's own balance, so balance + whish is everything you have.
+ * moves it back in (Whish's withdrawal fee is lost money: it leaves the wallet and never reaches cash).
+ * `whish` is the wallet's own balance, so balance + whish is everything you have.
  */
 export async function getBalance(bucket: R2Bucket): Promise<Balance> {
   const [items, settings, whishDocument] = await Promise.all([
@@ -237,7 +238,8 @@ export async function getBalance(bucket: R2Bucket): Promise<Balance> {
     else expenses += t.amount;
   }
   const whish = whishBalance(whishDocument.items, items);
-  return { income, expenses, whish, balance: settings.openingBalance + income - expenses - whish };
+  const fees = whishFees(whishDocument.items);
+  return { income, expenses, whish, balance: settings.openingBalance + income - expenses - fees - whish };
 }
 
 /* ---------------------------------------------------------------------------- recurring */
@@ -489,7 +491,7 @@ export async function getWhish(bucket: R2Bucket): Promise<WhishSummary> {
  */
 async function assertWhishBalance(
   bucket: R2Bucket,
-  change: { transfer?: WhishInput; transaction?: TransactionInput },
+  change: { transfer?: Pick<WhishTransfer, 'kind' | 'amount' | 'fee'>; transaction?: TransactionInput },
   exclude?: string,
 ) {
   const [doc, all] = await Promise.all([readWhish(bucket), listTransactions(bucket)]);
@@ -513,10 +515,23 @@ async function assertWhishCovers(bucket: R2Bucket, input: TransactionInput, edit
   await assertWhishBalance(bucket, { transaction: input }, editingId);
 }
 
+/**
+ * The transfer as stored: withdrawals carry Whish's 1% fee. Withdrawals recorded before fees were
+ * tracked (`keepFeeless`) stay fee-free when edited, so fixing an old note never changes a balance.
+ */
+function withFee<T extends WhishInput>(input: T, keepFeeless = false): T & { fee?: number } {
+  const fee = input.kind === 'withdrawal' && !keepFeeless ? whishWithdrawalFee(input.amount) : 0;
+  const next: T & { fee?: number } = { ...input };
+  if (fee > 0) next.fee = fee;
+  else delete next.fee;
+  return next;
+}
+
 export async function createWhishTransfer(bucket: R2Bucket, input: WhishInput): Promise<WhishTransfer> {
-  if (input.kind === 'withdrawal') await assertWhishBalance(bucket, { transfer: input });
+  const stored = withFee(input);
+  if (stored.kind === 'withdrawal') await assertWhishBalance(bucket, { transfer: stored });
   const now = nowIso();
-  const entry: WhishTransfer = { ...input, id: randomId('w'), createdAt: now, updatedAt: now };
+  const entry: WhishTransfer = { ...stored, id: randomId('w'), createdAt: now, updatedAt: now };
   await updateJson(bucket, KEYS.whish, whishDoc, emptyWhish, (current) => {
     if (current.items.length >= MAX_WHISH_TRANSFERS) throw new ValidationError('Too many Whish transfers');
     return { next: { items: [...current.items, entry] }, result: undefined };
@@ -524,12 +539,19 @@ export async function createWhishTransfer(bucket: R2Bucket, input: WhishInput): 
   return entry;
 }
 
+const isFeelessWithdrawal = (e: WhishTransfer | undefined) => e?.kind === 'withdrawal' && e.fee === undefined;
+
 export async function updateWhishTransfer(bucket: R2Bucket, id: string, input: WhishInput): Promise<WhishTransfer> {
-  await assertWhishBalance(bucket, { transfer: input }, id);
+  const before = (await readWhish(bucket)).items.find((e) => e.id === id);
+  if (!before) throw new NotFoundError('Whish transfer');
+  await assertWhishBalance(bucket, { transfer: withFee(input, isFeelessWithdrawal(before)) }, id);
   const { result } = await updateJson(bucket, KEYS.whish, whishDoc, emptyWhish, (current) => {
     const existing = current.items.find((e) => e.id === id);
     if (!existing) throw new NotFoundError('Whish transfer');
-    const updated: WhishTransfer = { ...existing, ...input, note: input.note, updatedAt: nowIso() };
+    const updated: WhishTransfer = withFee(
+      { ...existing, ...input, note: input.note, updatedAt: nowIso() },
+      isFeelessWithdrawal(existing),
+    );
     return { next: { items: current.items.map((e) => (e.id === id ? updated : e)) }, result: updated };
   });
   if (!result) throw new NotFoundError('Whish transfer');

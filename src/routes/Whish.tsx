@@ -3,7 +3,7 @@ import { useId, useState, type SyntheticEvent } from 'react';
 import { toast } from 'sonner';
 import { isValidIsoDate } from '../../shared/dates';
 import type { Transaction, WhishKind, WhishTransfer } from '../../shared/schema';
-import { signedTransfer } from '../../shared/whish';
+import { signedTransfer, whishWithdrawalFee, WHISH_WITHDRAWAL_FEE_RATE } from '../../shared/whish';
 import { FitAmount } from '@/components/FitAmount';
 import { EmptyState, ErrorMessage, RowsSkeleton } from '@/components/Feedback';
 import { Page, PageHeader } from '@/components/Layout';
@@ -191,12 +191,15 @@ function ActivityList({
     const deposit = e.kind === 'deposit';
     const label = deposit ? 'Top up from cash' : 'Withdrawn to cash';
     const signed = signedTransfer(e);
+    // What left (or reached) the wallet: a withdrawal includes Whish's fee.
+    const moved = Math.abs(signed);
+    const feeText = e.fee ? `incl. ${money(e.fee)} fee` : null;
     return (
       <button
         key={e.id}
         type="button"
         onClick={() => onEdit(e.kind, e)}
-        aria-label={`${label} ${money(e.amount)}${e.note ? `, ${e.note}` : ''}, ${formatDate(e.date, today)}. Edit`}
+        aria-label={`${label} ${money(e.amount)}${e.fee ? ` plus ${money(e.fee)} fee` : ''}${e.note ? `, ${e.note}` : ''}, ${formatDate(e.date, today)}. Edit`}
         className="flex min-h-16 w-full items-center gap-3 px-5 py-3 text-left transition-colors outline-none hover:bg-accent/60 focus-visible:bg-accent"
       >
         <span
@@ -211,15 +214,15 @@ function ActivityList({
         <span className="min-w-0 flex-1">
           <span className="block truncate font-medium">{e.note ?? label}</span>
           <span className="block truncate text-xs text-muted-foreground">
-            {[e.note ? label : null, formatDate(e.date, today)].filter(Boolean).join(' · ')}
+            {[e.note ? label : null, feeText, formatDate(e.date, today)].filter(Boolean).join(' · ')}
           </span>
         </span>
         <span className="row-amount flex flex-col items-end" aria-hidden="true">
           <span className={cn('tabular font-semibold', deposit && 'text-income')}>
             {signed > 0 ? '+' : '−'}
-            {money(e.amount)}
+            {money(moved)}
           </span>
-          <span className="tabular text-xs text-muted-foreground">{second(e.amount)}</span>
+          <span className="tabular text-xs text-muted-foreground">{second(moved)}</span>
         </span>
       </button>
     );
@@ -254,14 +257,22 @@ function TransferForm({
   const [errors, setErrors] = useState<Record<string, string>>({});
   // What can be withdrawn: the balance, plus this transfer's own effect when editing it.
   const available = balance - (editing ? signedTransfer(editing) : 0);
+  // Withdrawals recorded before fees were tracked stay fee-free when edited (the server does the same).
+  const feeless = editing?.kind === 'withdrawal' && editing.fee === undefined;
+  const feeFor = (cents: number) => (kind === 'withdrawal' && !feeless ? whishWithdrawalFee(cents) : 0);
+  const typed = amount.stored();
+  const fee = typed === null ? 0 : feeFor(typed);
+  const feePercent = `${WHISH_WITHDRAWAL_FEE_RATE * 100}%`;
 
   async function onSubmit(e: SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     const cents = amount.stored();
     const next: Record<string, string> = {};
     if (cents === null) next.amount = 'Enter an amount greater than zero';
-    else if (kind === 'withdrawal' && cents > available) {
-      next.amount = `You only have ${money(Math.max(0, available))} in Whish`;
+    else if (kind === 'withdrawal' && cents + feeFor(cents) > available) {
+      next.amount = feeless
+        ? `You only have ${money(Math.max(0, available))} in Whish`
+        : `You only have ${money(Math.max(0, available))} in Whish, and Whish takes a ${feePercent} fee`;
     }
     if (!isValidIsoDate(date)) next.date = 'Pick a valid date';
     setErrors(next);
@@ -276,7 +287,7 @@ function TransferForm({
           ? 'Whish transfer updated'
           : kind === 'deposit'
             ? `Added ${money(cents)} to Whish`
-            : `Withdrew ${money(cents)} from Whish`,
+            : `Withdrew ${money(cents)} from Whish${feeFor(cents) ? ` (${money(feeFor(cents))} fee)` : ''}`,
       );
       onDone();
     } catch (err) {
@@ -314,7 +325,11 @@ function TransferForm({
           </p>
         ) : (
           kind === 'withdrawal' && (
-            <p className="text-sm text-muted-foreground">{money(Math.max(0, available))} available in Whish</p>
+            <p className="text-sm text-muted-foreground" aria-live="polite">
+              {fee > 0 && typed !== null
+                ? `Whish fee (${feePercent}): ${money(fee)} · ${money(typed + fee)} leaves your wallet`
+                : `${money(Math.max(0, available))} available in Whish${feeless ? '' : ` · ${feePercent} fee on withdrawals`}`}
+            </p>
           )
         )}
       </div>

@@ -11,7 +11,7 @@ import type {
 
 /** One line of the report ledger: every kind of money movement in one list. */
 export type EntryKind =
-  'income' | 'expense' | 'savings-deposit' | 'savings-withdrawal' | 'whish-topup' | 'whish-withdrawal';
+  'income' | 'expense' | 'savings-deposit' | 'savings-withdrawal' | 'whish-topup' | 'whish-withdrawal' | 'whish-fee';
 
 export interface ReportEntry {
   id: string;
@@ -74,7 +74,8 @@ export interface Report {
   recurringExpenses: number;
   oneOffExpenses: number;
   savings: { deposited: number; withdrawn: number; net: number; count: number };
-  whish: { toppedUp: number; withdrawn: number; count: number };
+  /** `fees` is what Whish kept from withdrawals: money that left you, not a move between pots. */
+  whish: { toppedUp: number; withdrawn: number; fees: number; count: number };
   byMonth: MonthRow[];
   /** Everything in the range, newest first. */
   entries: ReportEntry[];
@@ -173,6 +174,24 @@ function transferEntry(e: WhishTransfer): ReportEntry {
   };
 }
 
+/** Whish's cut of a withdrawal, as its own money-out line. */
+function feeEntry(e: WhishTransfer & { fee: number }): ReportEntry {
+  return {
+    id: `${e.id}-fee`,
+    kind: 'whish-fee',
+    date: e.date,
+    amount: e.fee,
+    sign: -1,
+    title: 'Whish withdrawal fee',
+    category: 'Whish Money',
+    account: 'whish',
+    recurring: false,
+    createdAt: e.createdAt,
+  };
+}
+
+const hasFee = (e: WhishTransfer): e is WhishTransfer & { fee: number } => (e.fee ?? 0) > 0;
+
 const byNewest = (a: ReportEntry, b: ReportEntry) =>
   b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt);
 
@@ -220,6 +239,7 @@ export function buildReport(input: ReportInput): Report {
   const withdrawn = saved.filter((e) => e.kind === 'withdrawal').reduce((a, e) => a + e.amount, 0);
   const toppedUp = moved.filter((e) => e.kind === 'deposit').reduce((a, e) => a + e.amount, 0);
   const whishOut = moved.filter((e) => e.kind === 'withdrawal').reduce((a, e) => a + e.amount, 0);
+  const whishFees = moved.reduce((a, e) => a + (e.fee ?? 0), 0);
   const lastDay = to < today ? to : today;
   const days = Math.max(1, lastDay < from ? 1 : daysBetween(from, lastDay) + 1);
 
@@ -243,12 +263,13 @@ export function buildReport(input: ReportInput): Report {
     recurringExpenses,
     oneOffExpenses: expenses - recurringExpenses,
     savings: { deposited, withdrawn, net: deposited - withdrawn, count: saved.length },
-    whish: { toppedUp, withdrawn: whishOut, count: moved.length },
+    whish: { toppedUp, withdrawn: whishOut, fees: whishFees, count: moved.length },
     byMonth: [...months.values()].sort((a, b) => b.month.localeCompare(a.month)),
     entries: [
       ...txs.map((t) => transactionEntry(t, categories)),
       ...saved.map((e) => savingsEntry(e, categories)),
       ...moved.map(transferEntry),
+      ...moved.filter(hasFee).map(feeEntry),
     ].sort(byNewest),
   };
 }
@@ -269,4 +290,5 @@ export const ENTRY_LABEL: Record<EntryKind, string> = {
   'savings-withdrawal': 'From savings',
   'whish-topup': 'Whish top-up',
   'whish-withdrawal': 'Whish withdrawal',
+  'whish-fee': 'Whish fee',
 };

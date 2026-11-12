@@ -198,6 +198,8 @@ export type WhishInput = z.infer<typeof whishInput>;
 
 export const whishTransfer = whishInput.extend({
   id,
+  /** Whish's 1% cash-out fee, set by the server on withdrawals since 1.9.0. */
+  fee: z.number().int().min(0).max(MAX_AMOUNT_CENTS).optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -209,7 +211,7 @@ export type WhishDoc = z.infer<typeof whishDoc>;
 
 /** Everything the Whish Money page shows. */
 export interface WhishSummary {
-  /** Top-ups − withdrawals + Whish income − Whish expenses, in cents. */
+  /** Top-ups − withdrawals (with fees) + Whish income − Whish expenses, in cents. */
   balance: number;
   transfers: WhishTransfer[];
   /** Transactions paid or received through Whish, newest first. */

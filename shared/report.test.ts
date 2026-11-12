@@ -34,7 +34,7 @@ const savings: SavingsEntry[] = [
 ];
 const transfers: WhishTransfer[] = [
   { id: 'w1', kind: 'deposit', amount: 10_000, date: '2026-11-04', createdAt: at, updatedAt: at },
-  { id: 'w2', kind: 'withdrawal', amount: 3_000, date: '2026-11-07', createdAt: at, updatedAt: at },
+  { id: 'w2', kind: 'withdrawal', amount: 3_000, fee: 30, date: '2026-11-07', createdAt: at, updatedAt: at },
 ];
 
 const report = buildReport({
@@ -85,14 +85,15 @@ describe('buildReport', () => {
 
   it('includes savings and Whish moves', () => {
     expect(report.savings).toEqual({ deposited: 20_000, withdrawn: 5_000, net: 15_000, count: 2 });
-    expect(report.whish).toEqual({ toppedUp: 10_000, withdrawn: 3_000, count: 2 });
+    expect(report.whish).toEqual({ toppedUp: 10_000, withdrawn: 3_000, fees: 30, count: 2 });
   });
 
   it('lists every entry newest first with a direction', () => {
-    expect(report.entries.map((e) => e.id)).toEqual(['w2', 't5', 't3', 't4', 's2', 'w1', 's1', 't2', 't1']);
+    expect(report.entries.map((e) => e.id)).toEqual(['w2', 'w2-fee', 't5', 't3', 't4', 's2', 'w1', 's1', 't2', 't1']);
     const send = report.entries.find((e) => e.id === 't4');
     expect(send).toMatchObject({ sign: -1, account: 'whish', title: 'Sent to Sam', category: 'Shopping' });
     expect(report.entries.find((e) => e.id === 's1')).toMatchObject({ sign: 0, kind: 'savings-deposit' });
+    expect(report.entries.find((e) => e.id === 'w2-fee')).toMatchObject({ sign: -1, kind: 'whish-fee', amount: 30 });
   });
 
   it('groups by month for multi-month ranges', () => {

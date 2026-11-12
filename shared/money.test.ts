@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { monthsInRange, todayIn } from './dates';
-import { parseAmount } from './money';
+import { formatAmountInput, parseAmount, parseAmountIn } from './money';
 
 describe('parseAmount', () => {
   it.each([
@@ -40,5 +40,30 @@ describe('isValidIsoDate', () => {
     expect(isValidIsoDate('2026-02-29')).toBe(false);
     expect(isValidIsoDate('2026-13-01')).toBe(false);
     expect(isValidIsoDate('26-1-1')).toBe(false);
+  });
+});
+
+describe('formatAmountInput', () => {
+  it.each([
+    ['', 'USD', ''],
+    ['1234', 'USD', '1,234'],
+    ['1234567.891', 'USD', '1,234,567.89'],
+    ['1,2345', 'USD', '12,345'],
+    ['.5', 'USD', '0.5'],
+    ['12,', 'USD', '12.'],
+    ['1,234,', 'USD', '1,234.'],
+    ['007', 'USD', '7'],
+    ['-1500', 'USD', '-1,500'],
+    ['600000', 'LBP', '600,000'],
+    ['600.000', 'LBP', '600,000'],
+    ['1,500,000', 'LBP', '1,500,000'],
+    ['-89500', 'LBP', '-89,500'],
+  ] as const)('formats %s in %s', (raw, currency, expected) => {
+    expect(formatAmountInput(raw, currency)).toBe(expected);
+  });
+
+  it('round-trips through parsing', () => {
+    expect(parseAmountIn(formatAmountInput('1234567.5', 'USD'), 'USD')).toBe(123_456_750);
+    expect(parseAmountIn(formatAmountInput('600000', 'LBP'), 'LBP')).toBe(60_000_000);
   });
 });

@@ -21,6 +21,33 @@ export function centsToInput(cents: number, currency: Currency = 'USD'): string 
   return currency === 'LBP' ? String(Math.round(cents / 100)) : (cents / 100).toFixed(2);
 }
 
+/**
+ * Formats text typed into an amount field with thousands separators as you type: "1234.5" →
+ * "1,234.5", and in LBP (whole pounds, so dots and commas are only separators) "600000" → "600,000".
+ * In USD, a comma typed at the end with no decimal point yet becomes the decimal point, for keyboards
+ * that show "," as the decimal key. A leading minus is kept; callers decide whether to allow it.
+ */
+export function formatAmountInput(raw: string, currency: Currency): string {
+  const negative = raw.trimStart().startsWith('-');
+  let s = raw.replace(/[^\d.,]/g, '');
+  let fraction: string | null = null;
+  if (currency === 'USD') {
+    if (s.endsWith(',') && !s.includes('.')) s = `${s.slice(0, -1)}.`;
+    const dot = s.indexOf('.');
+    if (dot >= 0) {
+      fraction = s
+        .slice(dot + 1)
+        .replace(/[.,]/g, '')
+        .slice(0, 2);
+      s = s.slice(0, dot);
+    }
+  }
+  let whole = s.replace(/[.,]/g, '').replace(/^0+(?=\d)/, '');
+  if (whole === '' && fraction !== null) whole = '0';
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return `${negative ? '-' : ''}${grouped}${fraction === null ? '' : `.${fraction}`}`;
+}
+
 const formatters = new Map<string, Intl.NumberFormat>();
 
 export function formatMoney(

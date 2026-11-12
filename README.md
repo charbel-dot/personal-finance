@@ -55,7 +55,8 @@ Browser ──► Cloudflare Pages ── static SPA (dist/)
   send (with who it went to) or pay with Whish. Sends and payments are normal expenses marked as paid
   with Whish, so they still count in budgets. Current Balance is the money you hold outside Whish:
   topping up moves money out of it into Whish, withdrawing puts it back, and the dashboard shows the
-  Whish balance and the total of both. Any transaction or recurring entry can be paid with or received
+  Whish balance and the total of both. Withdrawals cost Whish's 1% fee: the wallet loses the amount
+  plus 1%, cash gains the amount, and the fee shows as its own line in reports. Any transaction or recurring entry can be paid with or received
   in Whish. The server refuses anything you do by hand that would overdraw the wallet; a recurring Whish
   payment still runs when the wallet is short, and the Whish page then flags the negative balance.
   LBP is always written as the plain code ("LBP 150,000"), never L£.

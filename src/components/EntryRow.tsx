@@ -1,4 +1,4 @@
-import { ArrowDownToLine, ArrowUpFromLine, PiggyBank } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpFromLine, Percent, PiggyBank } from 'lucide-react';
 import { Link } from 'react-router';
 import type { CategoriesDoc } from '../../shared/schema';
 import { ENTRY_LABEL, type ReportEntry } from '../../shared/report';
@@ -34,7 +34,7 @@ export function EntryRow({
 
   const savings = entry.kind === 'savings-deposit' || entry.kind === 'savings-withdrawal';
   const into = entry.kind === 'savings-deposit' || entry.kind === 'whish-topup';
-  const Icon = savings ? PiggyBank : into ? ArrowDownToLine : ArrowUpFromLine;
+  const Icon = savings ? PiggyBank : entry.kind === 'whish-fee' ? Percent : into ? ArrowDownToLine : ArrowUpFromLine;
   const label = ENTRY_LABEL[entry.kind];
   const meta = [
     entry.note ? label : null,

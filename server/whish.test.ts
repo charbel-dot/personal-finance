@@ -11,6 +11,8 @@ import {
   reconcileRecurring,
   updateRecurring,
   updateTransaction,
+  updateWhishTransfer,
+  KEYS,
   ValidationError,
 } from './data';
 
@@ -94,8 +96,9 @@ describe('whish money', () => {
     await createTransaction(db, whishSpend(5_000));
     expect(await getBalance(db)).toMatchObject({ balance: 70_000, whish: 25_000, expenses: 5_000 });
 
+    // Withdrawing 100.00 puts 100.00 in cash and takes 101.00 out of Whish (1% fee).
     await createWhishTransfer(db, { kind: 'withdrawal', amount: 10_000, date: '2026-11-03' });
-    expect(await getBalance(db)).toMatchObject({ balance: 80_000, whish: 15_000 });
+    expect(await getBalance(db)).toMatchObject({ balance: 80_000, whish: 14_900 });
 
     // Money received into Whish raises Whish, not cash.
     await createTransaction(db, {
@@ -105,7 +108,56 @@ describe('whish money', () => {
       date: '2026-11-04',
       account: 'whish',
     });
-    expect(await getBalance(db)).toMatchObject({ balance: 80_000, whish: 17_000 });
+    expect(await getBalance(db)).toMatchObject({ balance: 80_000, whish: 16_900 });
+  });
+
+  it('charges a 1% fee on withdrawals, in USD or LBP amounts', async () => {
+    const db = memoryBucket();
+    await createWhishTransfer(db, topUp(100_000_000)); // LBP 1,000,000
+    const out = await createWhishTransfer(db, { kind: 'withdrawal', amount: 60_000_000, date: '2026-11-03' });
+    expect(out.fee).toBe(600_000); // LBP 6,000 on LBP 600,000
+    expect((await getWhish(db)).balance).toBe(39_400_000);
+
+    const small = await createWhishTransfer(db, { kind: 'withdrawal', amount: 1_250, date: '2026-11-03' });
+    expect(small.fee).toBe(13); // $0.13 on $12.50 (rounded to the cent)
+
+    const top = await createWhishTransfer(db, topUp(500));
+    expect(top.fee).toBeUndefined();
+    // Turning a withdrawal into a top-up drops its fee.
+    expect((await updateWhishTransfer(db, small.id, { ...topUp(1_250) })).fee).toBeUndefined();
+  });
+
+  it('refuses a withdrawal whose fee would overdraw the wallet', async () => {
+    const db = memoryBucket();
+    await createWhishTransfer(db, topUp(10_000));
+    await expect(
+      createWhishTransfer(db, { kind: 'withdrawal', amount: 10_000, date: '2026-11-03' }),
+    ).rejects.toBeInstanceOf(ValidationError);
+    const max = await createWhishTransfer(db, { kind: 'withdrawal', amount: 9_900, date: '2026-11-03' });
+    expect(max.fee).toBe(99);
+    expect((await getWhish(db)).balance).toBe(1);
+  });
+
+  it('keeps withdrawals recorded before fees fee-free when edited', async () => {
+    const db = memoryBucket();
+    const now = '2026-10-01T00:00:00.000Z';
+    await db.put(
+      KEYS.whish,
+      JSON.stringify({
+        items: [
+          { id: 'w_old_in', kind: 'deposit', amount: 5_000, date: '2026-10-01', createdAt: now, updatedAt: now },
+          { id: 'w_old', kind: 'withdrawal', amount: 1_000, date: '2026-10-02', createdAt: now, updatedAt: now },
+        ],
+      }),
+    );
+    const edited = await updateWhishTransfer(db, 'w_old', {
+      kind: 'withdrawal',
+      amount: 1_000,
+      date: '2026-10-02',
+      note: 'ATM',
+    });
+    expect(edited.fee).toBeUndefined();
+    expect((await getWhish(db)).balance).toBe(4_000);
   });
 
   it('refuses to delete Whish income that was already spent', async () => {

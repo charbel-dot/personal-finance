@@ -35,7 +35,8 @@ export function useCurrency(): CurrencyTools {
     const toInput = (cents: number, currency: Currency = display) =>
       centsToInput(toCurrency(cents, currency), currency);
     const fromInput = (input: string, currency: Currency = display, original?: number) => {
-      if (original !== undefined && input === toInput(original, currency)) return original;
+      // Separators don't change the amount: "1,250.00" still reads the same as "1250.00".
+      if (original !== undefined && input.replace(/,/g, '') === toInput(original, currency)) return original;
       const cents = parseAmountIn(input, currency);
       if (cents === null) return null;
       const stored = convertCents(cents, currency, ledger, rate);

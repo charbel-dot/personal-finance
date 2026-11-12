@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Currency } from '../../shared/money';
+import { formatAmountInput, type Currency } from '../../shared/money';
 import { useCurrency } from '@/lib/format';
 
 export interface MoneyFieldState {
@@ -22,12 +22,16 @@ export interface MoneyFieldState {
 export function useMoneyField(original?: number): MoneyFieldState {
   const { display, toInput, fromInput } = useCurrency();
   const [currency, setCurrencyState] = useState<Currency>(display);
-  const initial = original === undefined ? '' : toInput(original, display);
+  // Amount fields show thousands separators ("1,250.00", "600,000").
+  const inputFor = (cents: number, c: Currency) => formatAmountInput(toInput(cents, c), c);
+  const initial = original === undefined ? '' : inputFor(original, display);
   const [value, setValue] = useState(initial);
 
   const setCurrency = (next: Currency) => {
     if (next === currency) return;
-    if (original !== undefined && value === toInput(original, currency)) setValue(toInput(original, next));
+    if (original !== undefined && value === inputFor(original, currency)) setValue(inputFor(original, next));
+    // LBP has no fractions: "1,234.56" typed in USD becomes "1,234" rather than "123,456".
+    else setValue(formatAmountInput(next === 'LBP' ? value.replace(/\..*$/, '') : value, next));
     setCurrencyState(next);
   };
 

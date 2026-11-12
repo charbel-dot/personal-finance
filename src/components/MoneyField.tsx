@@ -1,5 +1,6 @@
 import { CURRENCIES, convertCents, formatMoney, parseAmountIn, roundLbp, type Currency } from '../../shared/money';
 import type { MoneyFieldState } from '@/hooks/use-money-field';
+import { readAmountInput } from '@/lib/amount-input';
 import { currencySymbol, formatRate, useCurrency } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -99,7 +100,7 @@ export function MoneyInput({
           maxLength={20}
           aria-invalid={Boolean(error)}
           aria-describedby={[error ? (errorId ?? `${id}-error`) : undefined, hintId].filter(Boolean).join(' ')}
-          onChange={(e) => field.setValue(e.target.value.replace(allowNegative ? /[^\d.,-]/g : /[^\d.,]/g, ''))}
+          onChange={(e) => field.setValue(readAmountInput(e.target, field.value, field.currency, allowNegative))}
           onBlur={onBlur}
           onKeyDown={(e) => {
             if (onBlur && e.key === 'Enter') e.currentTarget.blur();

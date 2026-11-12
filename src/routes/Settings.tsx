@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Segmented } from '@/components/Segmented';
 import { useMoneyField } from '@/hooks/use-money-field';
 import { useSignOut } from '@/hooks/use-sign-out';
+import { readAmountInput } from '@/lib/amount-input';
 import { formatRate, useCurrency } from '@/lib/format';
 import { useAppData, usePatchSettings } from '@/lib/queries';
 import { useTheme, type ThemePref } from '@/lib/theme';
@@ -158,7 +159,7 @@ export default function Settings() {
                   autoComplete="off"
                   maxLength={12}
                   value={rateText}
-                  onChange={(e) => setRateText(e.target.value.replace(/[^\d,.\s]/g, ''))}
+                  onChange={(e) => setRateText(readAmountInput(e.target, rateText, 'LBP'))}
                   onBlur={saveRate}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') e.currentTarget.blur();

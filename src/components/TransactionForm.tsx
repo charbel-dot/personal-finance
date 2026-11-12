@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useConfirm } from '@/context/confirm';
 import { useMoneyField, type MoneyFieldState } from '@/hooks/use-money-field';
+import { readAmountInput } from '@/lib/amount-input';
 import { useUnsavedWarning } from '@/hooks/use-unsaved-warning';
 import { currencySymbol, useMoney } from '@/lib/format';
 import { useAppData, useDeleteTransaction, useSaveTransaction } from '@/lib/queries';
@@ -351,7 +352,7 @@ function AmountField({ id, errorId, hintId, field, error, focusOnOpen, onInput, 
           aria-invalid={Boolean(error)}
           aria-describedby={error ? `${errorId} ${hintId}` : hintId}
           onKeyDown={onKeyDown}
-          onChange={(e) => onInput(e.target.value.replace(/[^\d.,]/g, ''))}
+          onChange={(e) => onInput(readAmountInput(e.target, value, currency))}
           className="tabular w-full min-w-0 bg-transparent text-4xl font-bold tracking-tight outline-none placeholder:text-muted-foreground/50"
         />
       </div>

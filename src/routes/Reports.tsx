@@ -641,6 +641,17 @@ function MovesCard({ report }: { report: Report }) {
           value={money(report.byAccount.whish.income)}
           to="/whish"
         />
+        {report.whish.fees > 0 && (
+          <MoveLine
+            label={
+              <>
+                <WhishLogo size={14} /> Whish withdrawal fees (1%)
+              </>
+            }
+            value={`−${money(report.whish.fees)}`}
+            to="/whish"
+          />
+        )}
       </CardContent>
     </Card>
   );
