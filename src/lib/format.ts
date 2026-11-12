@@ -66,6 +66,11 @@ export function useSecondMoney() {
   );
 }
 
+/** Whether a row of figures should stack: any of them is too long to share a phone-width row. */
+export function longFigures(values: string[], limit = 14): boolean {
+  return values.some((v) => v.length > limit);
+}
+
 const rateFmt = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
 
 /** "1 USD = 89,500 LBP" */

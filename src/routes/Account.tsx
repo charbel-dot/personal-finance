@@ -23,6 +23,7 @@ import { useCountUp } from '@/hooks/use-count-up';
 import { useSignOut } from '@/hooks/use-sign-out';
 import { useMoney } from '@/lib/format';
 import { APP_VERSION } from '@/lib/pwa';
+import { csvField, download } from '@/lib/export';
 import { useAppData, useBalance, useMe, useSavings, useTransactions, useWhish } from '@/lib/queries';
 
 const longDate = new Intl.DateTimeFormat(undefined, {
@@ -39,21 +40,6 @@ function relativeFromNow(epochSeconds: number) {
   if (Math.abs(days) >= 1) return relative.format(days, 'day');
   const hours = Math.round((epochSeconds * 1000 - Date.now()) / 3_600_000);
   return relative.format(hours, 'hour');
-}
-
-function download(filename: string, content: string, type: string) {
-  const url = URL.createObjectURL(new Blob([content], { type }));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-/** RFC 4180 field: quote when needed, double inner quotes; neutralise spreadsheet formulas. */
-function csvField(value: string) {
-  const safe = /^[=+\-@]/.test(value) ? `'${value}` : value;
-  return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
 export default function Account() {

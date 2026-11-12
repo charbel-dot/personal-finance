@@ -4,6 +4,7 @@ import { useId, useState, type CSSProperties, type ReactNode, type SyntheticEven
 import { useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import { isValidIsoDate } from '../../shared/dates';
+import { FitAmount } from '@/components/FitAmount';
 import { AccountSwitch, RecipientField, WhishLogo } from '@/components/AccountFields';
 import { MoneyInput } from '@/components/MoneyField';
 import { useMoneyField } from '@/hooks/use-money-field';
@@ -92,14 +93,18 @@ export default function Recurring() {
 
       <div className="stagger space-y-4">
         <Card className="py-5">
-          <CardContent className="grid grid-cols-2 gap-5 lg:grid-cols-3">
+          <CardContent className="grid grid-cols-2 gap-5 lg:grid-cols-3 [&>*]:min-w-0">
             <div>
               <p className="text-sm text-muted-foreground">Bills each month</p>
-              <p className="tabular mt-1 text-2xl font-bold tracking-tight sm:text-3xl">{money(bills)}</p>
+              <div className="mt-1 font-bold tracking-tight">
+                <FitAmount text={money(bills)} max="1.875rem" min="1rem" />
+              </div>
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Income each month</p>
-              <p className="tabular mt-1 text-2xl font-bold tracking-tight text-income sm:text-3xl">{money(income)}</p>
+              <div className="mt-1 font-bold tracking-tight text-income">
+                <FitAmount text={money(income)} max="1.875rem" min="1rem" />
+              </div>
             </div>
             <div className="col-span-2 lg:col-span-1">
               <p className="text-sm text-muted-foreground">Next due</p>
@@ -225,7 +230,7 @@ function RuleRow({ rule, color, today, onEdit }: { rule: Rule; color?: string; t
           {!rule.paused && ` · next ${formatDate(nextDueDate(rule, today), today)}`}
         </span>
       </button>
-      <span className={cn('tabular shrink-0 font-semibold', rule.type === 'income' && 'text-income')}>
+      <span className={cn('row-amount tabular font-semibold', rule.type === 'income' && 'text-income')}>
         {rule.type === 'income' ? '+' : ''}
         {money(rule.amount)}
       </span>

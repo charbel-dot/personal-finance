@@ -22,6 +22,7 @@ import { upcoming } from '../../shared/recurring';
 import type { Balance, Transaction } from '../../shared/schema';
 import { WhishLogo } from '@/components/AccountFields';
 import { EmptyState, ErrorMessage, RowsSkeleton } from '@/components/Feedback';
+import { FitAmount } from '@/components/FitAmount';
 import { Page, PageHeader } from '@/components/Layout';
 import { Segmented } from '@/components/Segmented';
 import { TransactionRow } from '@/components/TransactionRow';
@@ -33,12 +34,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useQuickAdd } from '@/context/quickAdd';
 import { useCountUp } from '@/hooks/use-count-up';
 import { pick, useUrlState } from '@/hooks/use-url-state';
-import { formatDate, formatInDays, useMoney, useSecondMoney } from '@/lib/format';
+import { formatDate, formatInDays, longFigures, useMoney, useSecondMoney } from '@/lib/format';
 import { resolvePeriod, type Period, type PeriodKind } from '@/lib/period';
 import { useAppData, useBalance, useMe, useTransactions } from '@/lib/queries';
 import { localToday } from '@/lib/today';
 import { cn } from '@/lib/utils';
 import { CategoryCard, PaceCard } from './DashboardCharts';
+import { TodayCard } from './TodayCard';
 
 const PERIODS: { kind: PeriodKind; label: string }[] = [
   { kind: 'this-month', label: 'This Month' },
@@ -174,6 +176,8 @@ export default function Dashboard() {
 
       <div className="stagger grid gap-3 sm:gap-4 lg:grid-cols-3">
         <BalanceCard label={resolved.label} range={curRange} analysis={status === 'loading' ? null : analysis} />
+        {/* Right under the balance on phones; its own full row under the top cards on desktop. */}
+        <TodayCard today={today} className="lg:col-span-3" />
         <SavingsCard analysis={status === 'loading' ? null : analysis} />
         <Insights
           status={status}
@@ -251,15 +255,24 @@ function Insights({
 
 /* --------------------------------------------------------------------------- pieces */
 
-function AnimatedMoney({ cents, className, signed }: { cents: number; className?: string; signed?: boolean }) {
+/** Counts up to `cents` and always fits its box (sized from the final figure), however long it is. */
+function AnimatedMoney({
+  cents,
+  className,
+  signed,
+  max = '1.125rem',
+  min = '0.75rem',
+}: {
+  cents: number;
+  className?: string;
+  signed?: boolean;
+  max?: string;
+  min?: string;
+}) {
   const money = useMoney();
   const value = useCountUp(cents);
-  return (
-    <span className={cn('tabular', className)}>
-      <span className="sr-only">{money(cents, { signed })}</span>
-      <span aria-hidden="true">{money(value, { signed })}</span>
-    </span>
-  );
+  const final = money(cents, { signed });
+  return <FitAmount text={final} shown={money(value, { signed })} max={max} min={min} className={className} />;
 }
 
 /** Small pulsing dot that marks a figure as live. */
@@ -308,7 +321,7 @@ function Stat({
         {dot && <span className="size-2 rounded-full bg-(--dot)" style={{ '--dot': dot } as CSSProperties} />}
         {label}
       </span>
-      <span className={cn('tabular mt-1 block truncate text-base font-semibold sm:text-lg', tone)}>{value}</span>
+      <span className={cn('mt-1 block font-semibold', tone)}>{value}</span>
     </Link>
   );
 }
@@ -320,8 +333,13 @@ function BalanceCard({ label, range, analysis }: { label: string; range: Range; 
   const net = analysis?.totals.net ?? 0;
   const negative = (balance.data?.balance ?? 0) < 0;
   const loadingStat = <Skeleton className="h-6 w-20" />;
+  const money = useMoney();
+  // Very long amounts (billions of LBP) get a full-width line each instead of a squeezed third.
+  const stack =
+    analysis !== null &&
+    longFigures([money(analysis.totals.income), money(analysis.totals.expenses), money(net, { signed: true })]);
   return (
-    <Card className="gap-5 lg:col-span-2" data-tour="balance">
+    <Card className="gap-5 lg:order-first lg:col-span-2" data-tour="balance">
       <CardHeader>
         <div className="flex items-center gap-3">
           <IconTile icon={Wallet} tone="var(--income)" />
@@ -343,14 +361,19 @@ function BalanceCard({ label, range, analysis }: { label: string; range: Range; 
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="space-y-2">
-          <div className="text-4xl font-bold tracking-tight sm:text-5xl" aria-live="polite">
+          <div className="font-bold tracking-tight" aria-live="polite">
             {balance.data ? (
               <Link
                 to="/history?range=all"
-                className="-m-1 inline-block rounded-xl p-1 outline-none hover:bg-accent/40 focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                className="-m-1 block rounded-xl p-1 outline-none hover:bg-accent/40 focus-visible:ring-[3px] focus-visible:ring-ring/50"
                 aria-label="Balance: view all transactions"
               >
-                <AnimatedMoney cents={balance.data.balance} className={negative ? 'text-destructive' : 'text-income'} />
+                <AnimatedMoney
+                  cents={balance.data.balance}
+                  max="3rem"
+                  min="1.25rem"
+                  className={negative ? 'text-destructive' : 'text-income'}
+                />
               </Link>
             ) : (
               <Skeleton className="h-12 w-56" />
@@ -358,7 +381,7 @@ function BalanceCard({ label, range, analysis }: { label: string; range: Range; 
           </div>
           {balance.data && <BalanceExtras balance={balance.data} />}
         </div>
-        <div className="grid grid-cols-3 gap-3 border-t pt-5">
+        <div className={cn('grid gap-3 border-t pt-5', stack ? 'grid-cols-1' : 'grid-cols-3')}>
           <Stat
             label="Income"
             to={`${inRange}&type=income`}
@@ -391,14 +414,14 @@ function BalanceExtras({ balance }: { balance: Balance }) {
   const second = useSecondMoney();
   const money = useMoney();
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground [overflow-wrap:anywhere]">
       <span className="tabular">≈ {second(balance.balance)}</span>
       {balance.whish !== 0 && (
         <>
           <Link
             to="/whish"
             aria-label={`Whish Money balance ${money(balance.whish)}. Open Whish Money`}
-            className="inline-flex min-h-8 items-center gap-1.5 rounded-full border px-2.5 outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            className="inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-2xl border px-2.5 py-1 outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >
             <WhishLogo />
             <span>
@@ -419,7 +442,7 @@ function BalanceExtras({ balance }: { balance: Balance }) {
 
 function SavingsCard({ analysis }: { analysis: BudgetAnalysis | null }) {
   return (
-    <Card className="gap-5">
+    <Card className="gap-5 lg:order-first">
       <CardHeader>
         <div className="flex items-center gap-3">
           <IconTile icon={PiggyBank} tone="var(--brand-fg)" />
@@ -768,7 +791,7 @@ function UpcomingCard({ today }: { today: string }) {
                         {formatDate(date, today)} · {formatInDays(inDays)}
                       </p>
                     </div>
-                    <span className={cn('tabular font-semibold', rule.type === 'income' && 'text-income')}>
+                    <span className={cn('row-amount tabular font-semibold', rule.type === 'income' && 'text-income')}>
                       {rule.type === 'income' ? '+' : ''}
                       {money(rule.amount)}
                     </span>

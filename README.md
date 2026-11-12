@@ -61,6 +61,19 @@ Browser ──► Cloudflare Pages ── static SPA (dist/)
   LBP is always written as the plain code ("LBP 150,000"), never L£.
 - **Everything is a link**: dashboard figures, tips, budget buckets, chart cards, upcoming bills and
   account stats open the filtered History, Savings, Recurring or Categories page they describe.
+- **Today**: the home page has a Today card with what you spent, earned and saved today and every
+  entry from today (income, expenses, savings and Whish moves), linking to today's full report.
+- **Reports**: pick this month, last month, the last 30 days, this year, last year, all time or any
+  custom dates. Shows totals (income, expenses, net, share kept, spend per day, biggest expense,
+  savings, recurring vs one-off), spending by category and income by source (each linking to the
+  filtered History), needs/wants/savings and cash/Whish splits, savings and Whish moves, a
+  month-by-month table, and every entry of every kind, filterable. Export the range as CSV or print
+  it (always printed in the light theme).
+- **Big numbers**: amounts shrink to fit their box and wrap only at group separators, so even
+  trillions of LBP stay readable on a phone; long figure rows stack.
+- **Look**: each section has its own background colour mood that glides into the next as you move
+  between pages (a GPU-cheap opacity crossfade). On phones the header shows only the Whish icon and
+  an account icon whose menu holds Account, Reports, Categories, Settings and Sign Out.
 - **Liquid glass UI**: buttons, inputs, switches, segmented controls, menus and the phone tab bar use
   [glisse](https://github.com/0kzh/glisse); cards, sheets and popovers are frosted glass panels.
 - **Categories**: its own page with expense categories grouped by Needs / Wants / Savings and income

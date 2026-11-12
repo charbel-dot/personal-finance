@@ -67,7 +67,7 @@ export function TransactionRow({ transaction: t, category, showDate = true, toda
           </span>
         )}
       </span>
-      <span className="flex shrink-0 flex-col items-end">
+      <span className="row-amount flex flex-col items-end">
         <span className={cn('tabular font-semibold', income ? 'text-income' : 'text-foreground')}>
           {income ? '+' : '−'}
           {money(t.amount)}

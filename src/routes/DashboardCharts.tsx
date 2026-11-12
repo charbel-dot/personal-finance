@@ -244,6 +244,9 @@ function PaceChart({ points }: { points: ReturnType<typeof spendingPace> }) {
   const R = use(loadRecharts());
   const money = useMoney();
   const today = points.filter((p) => p.current !== null && p.current > 0).at(-1);
+  // Axis wide enough for its longest label ("LBP 11,049.4T" needs far more room than "$80").
+  const top = Math.max(10_000, ...points.map((p) => Math.max(p.current ?? 0, p.previous)));
+  const axisWidth = Math.min(112, Math.max(48, money(top, { compact: true }).length * 7 + 8));
   return (
     <ChartContainer config={paceConfig} className="aspect-auto h-56 w-full sm:h-64">
       <R.AreaChart data={points} margin={{ left: 4, right: 8, top: 8 }}>
@@ -263,7 +266,7 @@ function PaceChart({ points }: { points: ReturnType<typeof spendingPace> }) {
           tickFormatter={(d: string) => shortDay.format(parseIso(d))}
         />
         <R.YAxis
-          width={56}
+          width={axisWidth}
           tickLine={false}
           axisLine={false}
           tickCount={4}

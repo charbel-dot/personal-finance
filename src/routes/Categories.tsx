@@ -169,7 +169,7 @@ function CategoryList({
           <h2 className="font-semibold">{title}</h2>
           {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
         </div>
-        <span className="tabular shrink-0 text-sm text-muted-foreground">
+        <span className="row-amount tabular text-sm text-muted-foreground">
           {loading ? <Skeleton className="h-4 w-16" /> : `${money(total)} this month`}
         </span>
       </div>

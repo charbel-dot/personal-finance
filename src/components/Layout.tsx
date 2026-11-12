@@ -1,7 +1,18 @@
-import { CircleUserRound, History, House, LogOut, PiggyBank, Plus, Repeat, Settings, Tags } from 'lucide-react';
-import { Suspense, useEffect, type ComponentType, type ReactNode } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router';
-import { Button as GlassButton } from 'glisse';
+import {
+  CircleUserRound,
+  FileChartColumn,
+  History,
+  House,
+  LogOut,
+  PiggyBank,
+  Plus,
+  Repeat,
+  Settings,
+  Tags,
+} from 'lucide-react';
+import { Suspense, useEffect, useState, type ComponentType, type ReactNode } from 'react';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
+import { Button as GlassButton, Menu } from 'glisse';
 import { ErrorBoundary } from './ErrorBoundary';
 import { GlassTabBar } from './Segmented';
 import { Logo } from './Logo';
@@ -23,14 +34,17 @@ const NAV: { to: string; label: string; icon: ComponentType<{ className?: string
   { to: '/recurring', label: 'Recurring', icon: Repeat },
   { to: '/savings', label: 'Savings', icon: PiggyBank },
   { to: '/whish', label: 'Whish Money', icon: WhishIcon },
+  { to: '/reports', label: 'Reports', icon: FileChartColumn },
   { to: '/categories', label: 'Categories', icon: Tags },
   { to: '/account', label: 'Account', icon: CircleUserRound },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
-/** Phone top bar: the destinations that don't fit in the bottom bar. */
-const TOP_NAV = ['/whish', '/categories', '/account', '/settings'];
+/** Phone top bar: icons that stay one tap away. */
+const TOP_NAV = ['/whish'];
+/** Phone top bar: everything else, in the account menu. */
+const MORE_NAV = ['/account', '/reports', '/categories', '/settings'];
 /** Phone bottom bar: four destinations around the add button. */
-const BOTTOM_NAV = NAV.filter((n) => !TOP_NAV.includes(n.to));
+const BOTTOM_NAV = NAV.filter((n) => !TOP_NAV.includes(n.to) && !MORE_NAV.includes(n.to));
 /** Desktop sidebar: account and settings sit at the foot, above Sign Out. */
 const SIDEBAR_FOOT = ['/account', '/settings'];
 
@@ -88,6 +102,52 @@ export function Page({ children, className }: { children: ReactNode; className?:
   return <div className={cn('mx-auto w-full max-w-6xl px-5 lg:px-10', className)}>{children}</div>;
 }
 
+/**
+ * Page background. The previous section's mood stays underneath while the new one fades in on top
+ * (opacity only, so it is GPU-composited); once in, the new mood becomes the base.
+ */
+function Backdrop({ page }: { page: string }) {
+  const [base, setBase] = useState(page);
+  return (
+    <>
+      <div className="app-backdrop" data-page={base} aria-hidden="true" />
+      {base !== page && (
+        <div
+          key={page}
+          className="app-backdrop"
+          data-page={page}
+          data-entering=""
+          aria-hidden="true"
+          onAnimationEnd={() => setBase(page)}
+        />
+      )}
+    </>
+  );
+}
+
+/** Phone top bar: the account icon opens every page without a tab of its own, plus Sign Out. */
+function AccountMenu({ active, onSignOut }: { active: boolean; onSignOut: () => void }) {
+  const navigate = useNavigate();
+  return (
+    <Menu
+      aria-label="Account menu"
+      align="end"
+      icon={<CircleUserRound className="size-5" aria-hidden="true" />}
+      className={cn('rounded-full', active && 'bg-accent text-foreground')}
+      items={[
+        // In MORE_NAV order (Account first), not sidebar order.
+        ...MORE_NAV.flatMap((path) => NAV.filter((n) => n.to === path)).map(({ to, label, icon: Icon }) => ({
+          label,
+          icon: <Icon className="size-4" />,
+          onSelect: () => void navigate(to),
+        })),
+        'separator' as const,
+        { label: 'Sign Out', icon: <LogOut className="size-4" />, onSelect: onSignOut },
+      ]}
+    />
+  );
+}
+
 export function Layout() {
   const location = useLocation();
   const { openNew } = useQuickAdd();
@@ -114,8 +174,9 @@ export function Layout() {
   }, [openNew]);
 
   return (
-    <div className="min-h-dvh md:pl-64">
-      <div className="app-backdrop" aria-hidden="true" />
+    <div className="min-h-dvh md:pl-64 print:pl-0">
+      {/* Each section has its own colour mood; the colours glide when you switch pages. */}
+      <Backdrop page={location.pathname.split('/')[1] || 'home'} />
       <a
         href="#main"
         className="fixed top-2 left-2 z-50 -translate-y-20 rounded-md bg-primary px-4 py-2 text-primary-foreground focus:translate-y-0"
@@ -125,7 +186,7 @@ export function Layout() {
 
       {/* Desktop sidebar */}
       <aside
-        className="glass-chrome fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r md:flex"
+        className="glass-chrome fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r md:flex print:hidden"
         aria-label="Sidebar"
       >
         <div className="flex h-20 items-center gap-3 border-b px-6">
@@ -170,13 +231,13 @@ export function Layout() {
       </aside>
 
       {/* Phone top bar: product mark + categories, account, settings */}
-      <header className="glass-chrome sticky top-0 z-30 flex min-h-14 items-center justify-between border-b px-4 pt-safe md:hidden">
+      <header className="glass-chrome sticky top-0 z-30 flex min-h-14 items-center justify-between border-b px-4 pt-safe md:hidden print:hidden">
         <NavLink
           to="/"
           className="flex items-center gap-2.5 rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
           <Logo className="size-8" />
-          <span className="font-bold tracking-wide" translate="no">
+          <span className="font-bold tracking-wide max-[359px]:sr-only" translate="no">
             MONEY
           </span>
         </NavLink>
@@ -197,6 +258,10 @@ export function Layout() {
               <Icon className="size-5" aria-hidden="true" />
             </NavLink>
           ))}
+          {/* The tour's "Make It Yours" step points here on phones: Settings lives in this menu. */}
+          <span data-tour="settings" className="rounded-full">
+            <AccountMenu active={MORE_NAV.some(isActive)} onSignOut={() => void signOut()} />
+          </span>
         </div>
       </header>
 
@@ -213,7 +278,7 @@ export function Layout() {
       <Walkthrough />
 
       {/* Phone bottom bar: liquid glass tab bar + floating add button */}
-      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 px-2 pb-[max(0.5rem,calc(env(safe-area-inset-bottom)-0.625rem))] md:hidden">
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 px-2 pb-[max(0.5rem,calc(env(safe-area-inset-bottom)-0.625rem))] md:hidden print:hidden">
         {/* Hugs the screen edges: the home indicator only needs ~24px, not the full 34px inset. */}
         <div className="pointer-events-auto mx-auto flex max-w-lg items-center gap-2">
           <GlassTabBar

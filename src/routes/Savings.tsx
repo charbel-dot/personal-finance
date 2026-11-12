@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { CATEGORY_COLORS } from '../../shared/defaults';
 import { endOfMonth, isValidIsoDate, startOfMonth } from '../../shared/dates';
 import { formatPercent } from '../../shared/money';
+import { FitAmount } from '@/components/FitAmount';
 import { MoneyInput } from '@/components/MoneyField';
 import { useMoneyField } from '@/hooks/use-money-field';
 import { goalProgress, savingsBalance, signedAmount, summarizeSavings, type GoalProgress } from '../../shared/savings';
@@ -249,8 +250,8 @@ function SummaryCard({
           {loading ? (
             <Skeleton className="mt-2 h-8 w-32" />
           ) : (
-            <span className="tabular mt-1 block text-2xl font-bold tracking-tight text-income sm:text-3xl">
-              {money(total)}
+            <span className="mt-1 block font-bold tracking-tight text-income">
+              <FitAmount text={money(total)} max="1.875rem" min="1rem" />
             </span>
           )}
         </button>
@@ -259,9 +260,9 @@ function SummaryCard({
           {loading ? (
             <Skeleton className="mt-2 h-8 w-24" />
           ) : (
-            <p className="tabular mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
-              {money(monthTotal, { signed: true })}
-            </p>
+            <div className="mt-1 font-bold tracking-tight">
+              <FitAmount text={money(monthTotal, { signed: true })} max="1.875rem" min="1rem" />
+            </div>
           )}
         </div>
         <div className="col-span-2 lg:col-span-1">
@@ -580,7 +581,7 @@ function SourceRow({
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline justify-between gap-3">
             <span className="truncate font-medium">{source.name}</span>
-            <span className={cn('tabular shrink-0 font-semibold', net === 0 && 'text-muted-foreground')}>
+            <span className={cn('row-amount tabular font-semibold', net === 0 && 'text-muted-foreground')}>
               {money(net)}
             </span>
           </span>
@@ -653,7 +654,7 @@ function EntryRow({
             {entry.note && ` · ${entry.note}`}
           </span>
         </span>
-        <span className={cn('tabular shrink-0 font-semibold', deposit ? 'text-income' : 'text-expense')}>
+        <span className={cn('row-amount tabular font-semibold', deposit ? 'text-income' : 'text-expense')}>
           {deposit ? '+' : '−'}
           {money(entry.amount)}
         </span>

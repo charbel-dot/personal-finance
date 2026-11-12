@@ -14,6 +14,10 @@ const PORT = 8799;
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
+  // The local stack (wrangler pages dev on a developer machine) serves each asset in 1-2 s, far
+  // slower than the CDN in production; give steps room so timing noise is not read as a failure.
+  timeout: 60_000,
+  expect: { timeout: 10_000 },
   workers: 1,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? 'github' : 'list',

@@ -49,8 +49,8 @@ const STEPS: Step[] = [
   {
     target: 'settings',
     title: 'Make It Yours',
-    body: () =>
-      'Set your currency and opening balance, and choose how each income splits into needs, wants and savings.',
+    body: (desktop) =>
+      `${desktop ? 'In Settings, set' : 'Open Settings from this account menu to set'} your currencies, rate and opening balance, and choose how each income splits into needs, wants and savings.`,
   },
   {
     title: 'You’re All Set',

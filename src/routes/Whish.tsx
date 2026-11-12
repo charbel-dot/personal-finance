@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { isValidIsoDate } from '../../shared/dates';
 import type { Transaction, WhishKind, WhishTransfer } from '../../shared/schema';
 import { signedTransfer } from '../../shared/whish';
+import { FitAmount } from '@/components/FitAmount';
 import { EmptyState, ErrorMessage, RowsSkeleton } from '@/components/Feedback';
 import { Page, PageHeader } from '@/components/Layout';
 import { MoneyInput } from '@/components/MoneyField';
@@ -72,15 +73,12 @@ export default function Whish() {
             <div aria-live="polite">
               {whish.data ? (
                 <>
-                  <p
-                    className={cn(
-                      'tabular text-4xl font-bold tracking-tight sm:text-5xl',
-                      balance < 0 && 'text-destructive',
-                    )}
-                  >
-                    {money(balance)}
+                  <div className={cn('font-bold tracking-tight', balance < 0 && 'text-destructive')}>
+                    <FitAmount text={money(balance)} max="3rem" min="1.25rem" />
+                  </div>
+                  <p className="tabular mt-1 text-sm text-muted-foreground [overflow-wrap:anywhere]">
+                    ≈ {second(balance)}
                   </p>
-                  <p className="tabular mt-1 text-sm text-muted-foreground">≈ {second(balance)}</p>
                   {balance < 0 && (
                     <p className="mt-3 text-sm text-destructive" role="status">
                       A recurring Whish payment ran without enough money in the wallet. Top up to cover it.
@@ -216,7 +214,7 @@ function ActivityList({
             {[e.note ? label : null, formatDate(e.date, today)].filter(Boolean).join(' · ')}
           </span>
         </span>
-        <span className="flex shrink-0 flex-col items-end" aria-hidden="true">
+        <span className="row-amount flex flex-col items-end" aria-hidden="true">
           <span className={cn('tabular font-semibold', deposit && 'text-income')}>
             {signed > 0 ? '+' : '−'}
             {money(e.amount)}

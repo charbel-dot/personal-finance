@@ -3,6 +3,12 @@ import { E2E_PASSWORD, E2E_USER } from '../playwright.config';
 
 const welcome = (page: Page) => page.getByRole('dialog', { name: 'Welcome to Money' });
 
+/** Pages other than the tabs and Whish open from the phone header's account menu. */
+async function openFromMenu(page: Page, name: string) {
+  await page.getByRole('button', { name: 'Account menu' }).click();
+  await page.getByRole('menuitem', { name }).click();
+}
+
 async function login(page: Page, password = E2E_PASSWORD, { tour = false, username = E2E_USER } = {}) {
   // The first-run walkthrough opens once per account; tests not about it skip it whenever it shows.
   if (!tour) {
@@ -36,7 +42,7 @@ test('first-run walkthrough: tours the app once, then replays from Settings', as
   await expect(page.getByRole('dialog')).toBeHidden();
 
   // Replay from Settings; Escape closes it and clears the URL flag.
-  await page.getByRole('link', { name: 'Settings' }).click();
+  await openFromMenu(page, 'Settings');
   await page.getByRole('link', { name: 'Replay Tour' }).click();
   await expect(page.getByRole('dialog')).toHaveAccessibleName('Welcome to Money');
   await page.keyboard.press('Escape');
@@ -60,7 +66,7 @@ test.describe('auth', () => {
     // "Remember me" is on by default → persistent 30-day cookie.
     expect(cookie?.expires ?? 0).toBeGreaterThan(Date.now() / 1000 + 29 * 24 * 3600);
 
-    await page.getByRole('link', { name: 'Settings' }).click();
+    await openFromMenu(page, 'Settings');
     await page.getByRole('button', { name: 'Sign Out' }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Sign Out' }).click();
     await expect(page).toHaveURL(/\/login$/);
@@ -158,7 +164,7 @@ test('recurring: create, pause, resume and delete', async ({ page }) => {
 
 test('settings: theme, currencies and a new category', async ({ page }) => {
   await login(page);
-  await page.getByRole('link', { name: 'Settings' }).click();
+  await openFromMenu(page, 'Settings');
 
   await page.getByRole('radio', { name: 'Light' }).click();
   await expect(page.locator('html')).not.toHaveClass(/dark/);
@@ -172,7 +178,10 @@ test('settings: theme, currencies and a new category', async ({ page }) => {
   await rate.press('Enter');
   await expect(page.getByText('Rate set to 1 USD = 90,000 LBP')).toBeVisible();
 
-  await page.getByRole('link', { name: 'Categories' }).click();
+  // Categories lives in the phone header's account menu.
+  await page.getByRole('button', { name: 'Account menu' }).click();
+  await page.getByRole('menuitem', { name: 'Categories' }).click();
+  await expect(page).toHaveURL(/\/categories$/);
   await page.getByRole('button', { name: 'New Category' }).click();
   const sheet = page.getByRole('dialog', { name: 'New Category' });
   await sheet.getByRole('button', { name: 'Add Category' }).click();
@@ -191,7 +200,7 @@ test('settings: theme, currencies and a new category', async ({ page }) => {
   await page.keyboard.press('Escape');
 
   // Back to USD at the default rate for the tests that follow.
-  await page.getByRole('link', { name: 'Settings' }).click();
+  await openFromMenu(page, 'Settings');
   await page.getByRole('radio', { name: /^USD/ }).click();
   await expect(page.getByText('Main currency set to USD')).toBeVisible();
   await rate.fill('89500');
@@ -269,7 +278,7 @@ test('dashboard custom range and history filters', async ({ page }) => {
 
 test('account shows the user and exports data', async ({ page }) => {
   await login(page);
-  await page.getByRole('link', { name: 'Account' }).click();
+  await openFromMenu(page, 'Account');
   await expect(page.getByRole('heading', { name: 'Account', level: 1 })).toBeVisible();
   await expect(page.getByText(E2E_USER, { exact: true })).toBeVisible();
   const download = page.waitForEvent('download');
@@ -289,7 +298,7 @@ test('recurring income and a custom budget rule', async ({ page }) => {
   await expect(page.getByText(/Salary added/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Edit Salary' })).toBeVisible();
 
-  await page.getByRole('link', { name: 'Settings' }).click();
+  await openFromMenu(page, 'Settings');
   await page.getByLabel('Needs').fill('60');
   await expect(page.getByText(/Total 110%/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Save Rule' })).toBeDisabled();
@@ -369,7 +378,7 @@ test('dashboard cards link to where they belong', async ({ page }) => {
   await page.getByRole('link', { name: 'Home' }).click();
   await page.getByRole('link', { name: 'Savings', exact: true }).first().click();
   await expect(page).toHaveURL(/\/savings/);
-  await page.getByRole('link', { name: 'Account' }).click();
+  await openFromMenu(page, 'Account');
   await page
     .getByRole('link', { name: /^Recurring/ })
     .last()
@@ -378,7 +387,7 @@ test('dashboard cards link to where they belong', async ({ page }) => {
 });
 
 async function signOut(page: Page) {
-  await page.getByRole('link', { name: 'Settings' }).click();
+  await openFromMenu(page, 'Settings');
   await page.getByRole('button', { name: 'Sign Out' }).click();
   await page.getByRole('alertdialog').getByRole('button', { name: 'Sign Out' }).click();
   await expect(page).toHaveURL(/\/login$/);
@@ -389,7 +398,7 @@ test('users: the owner adds a user who only sees their own data, then removes th
   test.slow();
   // Owner adds "sam" from Account → People.
   await login(page);
-  await page.getByRole('link', { name: 'Account' }).click();
+  await openFromMenu(page, 'Account');
   await page.getByRole('button', { name: 'Add User' }).click();
   const sheet = page.getByRole('dialog', { name: 'Add User' });
   await sheet.getByLabel('Username').fill('Sam');
@@ -418,7 +427,7 @@ test('users: the owner adds a user who only sees their own data, then removes th
   await tx.getByRole('button', { name: 'Add Expense' }).click();
   await expect(page.getByText('Expense added')).toBeVisible();
   // Members manage their own password; they can't manage people.
-  await page.getByRole('link', { name: 'Account' }).click();
+  await openFromMenu(page, 'Account');
   await expect(page.getByRole('heading', { name: 'Change Password' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Add User' })).toHaveCount(0);
   expect((await page.request.get('/api/users')).status()).toBe(403);
@@ -429,7 +438,7 @@ test('users: the owner adds a user who only sees their own data, then removes th
   await page.getByRole('link', { name: 'History' }).click();
   await page.getByLabel('Search transactions').fill('coffee');
   await expect(page.getByRole('button', { name: /Sam coffee/ })).toHaveCount(0);
-  await page.getByRole('link', { name: 'Account' }).click();
+  await openFromMenu(page, 'Account');
   await page.getByRole('button', { name: 'Remove sam' }).click();
   await page.getByRole('alertdialog').getByRole('button', { name: 'Remove User' }).click();
   await expect(page.getByText('sam removed')).toBeVisible();
@@ -442,4 +451,53 @@ test('users: the owner adds a user who only sees their own data, then removes th
   await page.getByLabel('Password', { exact: true }).fill('sam-password-1');
   await page.getByLabel('Password', { exact: true }).press('Enter');
   await expect(page.getByRole('alert')).toContainText('Incorrect username or password');
+});
+
+test('home shows today, and reports add up any period with custom dates', async ({ page }) => {
+  await login(page);
+  await expect(page.getByRole('heading', { name: /^Good / })).toBeVisible();
+
+  // Today card: earlier tests logged entries today.
+  const todayCard = page.locator('[aria-labelledby="today-title"]');
+  await expect(todayCard.getByText(/\d+ entr(y|ies) so far/)).toBeVisible();
+  await expect(todayCard.getByText('Spent', { exact: true })).toBeVisible();
+  // Earlier tests log more than the card shows: six rows (newest first), then a link to the rest.
+  await expect(todayCard.getByRole('link', { name: /^See all \d+ entries from today$/ })).toBeVisible();
+
+  // Full report for today opens Reports on a custom one-day range.
+  await todayCard.getByRole('link', { name: 'Full Report' }).click();
+  await expect(page).toHaveURL(/\/reports\?range=custom&from=\d{4}-\d{2}-\d{2}&to=\d{4}-\d{2}-\d{2}/);
+  await expect(page.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
+  // The phone header keeps only Whish; Reports and the rest are in the account menu.
+  await expect(page.getByRole('link', { name: 'Reports' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Account menu' }).click();
+  for (const item of ['Account', 'Reports', 'Categories', 'Settings']) {
+    await expect(page.getByRole('menuitem', { name: item })).toBeVisible();
+  }
+  await expect(page.getByRole('menuitem', { name: 'Sign Out' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('heading', { name: 'Summary' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Spending by Category' })).toBeVisible();
+  await expect(page.getByRole('link', { name: /^Dining out: / })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'All Entries' })).toBeVisible();
+  // The full list for today has the earliest entry too.
+  await expect(page.getByRole('button', { name: /Team lunch/ }).first()).toBeVisible();
+
+  // Custom dates: a start after the end drags the end along; nothing was logged in 2030.
+  await page.getByLabel('From').fill('2030-01-01');
+  await expect(page.getByLabel('To')).toHaveValue('2030-01-01');
+  await expect(page.getByText('Nothing in These Dates')).toBeVisible();
+
+  // All time: every kind of entry, filterable, and exportable.
+  await page.getByRole('combobox', { name: 'Period' }).click();
+  await page.getByRole('option', { name: 'All time' }).click();
+  await expect(page.getByRole('heading', { name: 'Savings and Whish' })).toBeVisible();
+  await page.getByRole('combobox', { name: 'Show' }).click();
+  await page.getByRole('option', { name: 'Whish Money' }).click();
+  await expect(page.getByRole('link', { name: /^Whish top-up / }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: /Team lunch/ })).toHaveCount(0);
+
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export CSV' }).click();
+  expect((await download).suggestedFilename()).toMatch(/^money-report-\d{4}-\d{2}-\d{2}-to-\d{4}-\d{2}-\d{2}\.csv$/);
 });
