@@ -58,7 +58,7 @@ export function QuickAddProvider({ children }: { children: ReactNode }) {
   return (
     <QuickAddContext value={api}>
       {children}
-      <ResponsiveSheet open={open} onClose={close} title={title}>
+      <ResponsiveSheet open={open} onClose={close} title={title} fullScreen>
         <TransactionForm
           key={state.nonce}
           initialType={state.type}

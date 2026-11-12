@@ -157,6 +157,7 @@ export default function Recurring() {
       <ResponsiveSheet
         open={sheet.open}
         onClose={closeSheet}
+        fullScreen
         title={
           sheet.rule
             ? sheet.rule.type === 'income'

@@ -193,7 +193,7 @@ export default function Savings() {
         </div>
       )}
 
-      <ResponsiveSheet open={sheet.open} onClose={close} title={sheetTitle(sheet.content)}>
+      <ResponsiveSheet open={sheet.open} onClose={close} title={sheetTitle(sheet.content)} fullScreen>
         {sheet.content.kind === 'goal' ? (
           <GoalForm key={sheet.nonce} goal={sheet.content.goal} onDone={close} />
         ) : (

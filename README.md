@@ -51,6 +51,9 @@ Browser ──► Cloudflare Pages ── static SPA (dist/)
   entries, savings, goals and the opening balance can all be typed in either currency. Totals and rows
   show the main currency with the second currency underneath. Amounts are stored in the account's
   base currency and converted for display; converted LBP is rounded to the nearest 1,000.
+- **Sheets fit the phone**: short forms (Whish top-up, users) open as bottom sheets; long ones (add
+  transaction, recurring, savings, goals, categories) open full screen on phones, with Save pinned to
+  the bottom edge. On desktop every form is a centred dialog.
 - **Whish Money**: a wallet page with your Whish balance. Top up from cash, withdraw back to cash,
   send (with who it went to) or pay with Whish. Sends and payments are normal expenses marked as paid
   with Whish, so they still count in budgets. Current Balance is the money you hold outside Whish:

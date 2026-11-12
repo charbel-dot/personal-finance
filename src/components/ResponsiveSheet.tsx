@@ -10,19 +10,25 @@ interface Props {
   onClose: () => void;
   title: string;
   description?: string;
+  /**
+   * Phones: open as a full-screen page instead of a bottom sheet. For long forms that would
+   * otherwise fill the screen anyway and leave a sliver of page peeking out above them.
+   */
+  fullScreen?: boolean;
   children: ReactNode;
 }
 
 /**
- * Centred dialog on desktop, bottom sheet on phones. Both: fixed header, scrolling body, and forms
- * put their actions in <SheetFooter>, pinned to the bottom of the body so Save is always reachable.
+ * Centred dialog on desktop, bottom sheet (or full-screen page) on phones. Both: fixed header,
+ * scrolling body, and forms put their actions in <SheetFooter>, pinned to the bottom so Save is
+ * always reachable.
  */
 export function ResponsiveSheet(props: Props) {
   const desktop = useIsDesktop();
   return desktop ? <DesktopDialog {...props} /> : <PhoneSheet {...props} />;
 }
 
-function DesktopDialog({ open, onClose, title, description, children }: Props) {
+function DesktopDialog({ open, onClose, title, description, children }: Omit<Props, 'fullScreen'>) {
   const body = useRef<HTMLDivElement>(null);
   // Desktop only: jump straight to the field marked `data-autofocus` (e.g. the amount).
   const onOpenAutoFocus = (e: Event) => {
@@ -134,11 +140,13 @@ function useRevealFocusedField(body: RefObject<HTMLDivElement | null>, area: Vis
   };
 }
 
-function PhoneSheet({ open, onClose, title, description, children }: Props) {
+function PhoneSheet({ open, onClose, title, description, fullScreen = false, children }: Props) {
   const area = useVisibleArea(open);
   const body = useRef<HTMLDivElement>(null);
   const onBodyFocus = useRevealFocusedField(body, area);
   const keyboard = area?.keyboard ?? false;
+  // Fills the whole visible area: always for full-screen sheets, and for any sheet while typing.
+  const full = fullScreen || keyboard;
   // The frame covers exactly the visible area; the sheet hugs its bottom edge, and while the
   // keyboard is up it fills the whole visible area so the field being typed in has maximum room.
   // While the keyboard is up the home indicator is hidden, so the footer drops its safe-area padding.
@@ -164,18 +172,18 @@ function PhoneSheet({ open, onClose, title, description, children }: Props) {
             }}
             className={cn(
               'pointer-events-auto flex flex-col glass-panel-strong border-t outline-none transition-[border-radius] duration-200',
-              keyboard ? 'h-full max-h-full rounded-t-none' : 'max-h-[min(94%,92dvh)] rounded-t-[28px]',
+              full ? 'h-full max-h-full rounded-t-none border-t-0' : 'max-h-[min(94%,92dvh)] rounded-t-[28px]',
               'data-[state=closed]:animate-out data-[state=closed]:duration-200 data-[state=closed]:slide-out-to-bottom',
               'data-[state=open]:animate-in data-[state=open]:duration-300 data-[state=open]:ease-out-expo data-[state=open]:slide-in-from-bottom',
             )}
           >
-            {!keyboard && (
-              <div className="mx-auto mt-2.5 h-1.5 w-10 shrink-0 rounded-full bg-muted" aria-hidden="true" />
-            )}
+            {!full && <div className="mx-auto mt-2.5 h-1.5 w-10 shrink-0 rounded-full bg-muted" aria-hidden="true" />}
             <div
               className={cn(
                 'flex shrink-0 items-start justify-between gap-3 px-4 pb-3',
-                keyboard ? 'pt-[max(--spacing(3),env(safe-area-inset-top))]' : 'pt-2',
+                full ? 'pt-[max(--spacing(3),env(safe-area-inset-top))]' : 'pt-2',
+                // A full-screen page gets a header line to separate its title from the scrolling form.
+                fullScreen && 'border-b',
               )}
             >
               <div className="min-w-0">
@@ -194,8 +202,13 @@ function PhoneSheet({ open, onClose, title, description, children }: Props) {
             <div
               ref={body}
               onFocus={onBodyFocus}
-              // Scroll padding keeps a revealed field clear of the sticky <SheetFooter>.
-              className="min-h-0 flex-1 scroll-pt-4 scroll-pb-28 overflow-y-auto overscroll-contain px-4 [--sheet-px:--spacing(4)]"
+              // Scroll padding keeps a revealed field clear of the sticky <SheetFooter>. A full-screen
+              // form stretches to the bottom so its footer sits on the bottom edge, not mid-screen.
+              className={cn(
+                'min-h-0 flex-1 scroll-pt-4 scroll-pb-28 overflow-y-auto overscroll-contain px-4 [--sheet-px:--spacing(4)]',
+                fullScreen &&
+                  'pt-4 [&>form]:flex [&>form]:min-h-full [&>form]:flex-col [&>form>[data-sheet-footer]]:mt-auto',
+              )}
             >
               {children}
             </div>
@@ -210,6 +223,7 @@ function PhoneSheet({ open, onClose, title, description, children }: Props) {
 export function SheetFooter({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <div
+      data-sheet-footer=""
       className={cn(
         'sticky bottom-0 z-10 -mx-(--sheet-px) mt-6 flex gap-2 border-t bg-[var(--glass-solid)] px-(--sheet-px) pt-4 pb-[max(--spacing(4),var(--sheet-safe-bottom,env(safe-area-inset-bottom)))]',
         className,

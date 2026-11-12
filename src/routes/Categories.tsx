@@ -125,6 +125,7 @@ export default function Categories() {
       <ResponsiveSheet
         open={sheet.open}
         onClose={() => setSheet((s) => ({ ...s, open: false }))}
+        fullScreen
         title={
           sheet.category
             ? `Edit ${tab === 'expense' ? 'Category' : 'Income Source'}`
