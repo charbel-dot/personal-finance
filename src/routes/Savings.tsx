@@ -337,7 +337,7 @@ function GoalsSection({
           </EmptyState>
         </Card>
       ) : (
-        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-label="Savings goals">
+        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-label="Savings goals">
           {progress.map((p) => (
             <GoalCard
               key={p.goal.id}
@@ -520,7 +520,7 @@ function GoalCard({
             <button
               type="button"
               onClick={onShow}
-              className="block w-full truncate text-left font-semibold outline-none after:absolute after:inset-0 after:rounded-2xl focus-visible:after:ring-[3px] focus-visible:after:ring-ring/50"
+              className="line-clamp-2 w-full text-left font-semibold break-words outline-none after:absolute after:inset-0 after:rounded-2xl focus-visible:after:ring-[3px] focus-visible:after:ring-ring/50"
               aria-label={`${goal.name}: ${money(Math.max(0, p.saved))} of ${money(goal.target)}. Show entries`}
             >
               {goal.name}
