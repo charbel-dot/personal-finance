@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createRecurring,
+  createSavings,
   createTransaction,
   createWhishTransfer,
   deleteTransaction,
@@ -109,6 +110,14 @@ describe('whish money', () => {
       account: 'whish',
     });
     expect(await getBalance(db)).toMatchObject({ balance: 80_000, whish: 16_900 });
+  });
+
+  it('puts money taken out of savings into Current Balance', async () => {
+    const db = memoryBucket();
+    await createSavings(db, { kind: 'deposit', amount: 10_000, sourceId: 'salary', date: '2026-11-01' });
+    expect((await getBalance(db)).balance).toBe(0);
+    await createSavings(db, { kind: 'withdrawal', amount: 4_000, sourceId: 'salary', date: '2026-11-02' });
+    expect((await getBalance(db)).balance).toBe(4_000);
   });
 
   it('charges a 1% fee on withdrawals, in USD or LBP amounts', async () => {

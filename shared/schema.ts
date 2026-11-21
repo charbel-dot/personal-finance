@@ -331,7 +331,7 @@ export interface Bootstrap {
 }
 
 export interface Balance {
-  /** Money outside Whish (cash and bank): opening + income − expenses − Whish balance. */
+  /** Money outside Whish (cash and bank): opening + income − expenses − Whish balance + savings withdrawals. */
   balance: number;
   /** Money in the Whish wallet. */
   whish: number;

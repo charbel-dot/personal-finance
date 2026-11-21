@@ -1,7 +1,7 @@
 import { DEFAULT_CATEGORIES, DEFAULT_SETTINGS } from '../shared/defaults';
 import { addDays, monthOf, monthsInRange, startOfMonth, todayIn } from '../shared/dates';
 import { generateDue } from '../shared/recurring';
-import { bySavingsDateDesc, savingsBalance } from '../shared/savings';
+import { bySavingsDateDesc, savingsBalance, summarizeSavings } from '../shared/savings';
 import { byTransferDateDesc, whishBalance, whishFees, whishWithdrawalFee } from '../shared/whish';
 import {
   categoriesDoc,
@@ -223,13 +223,15 @@ export async function deleteTransaction(bucket: R2Bucket, id: string, month: str
  * All-time totals. `balance` is the money you hold outside Whish: opening balance + income − expenses,
  * minus what sits in the Whish wallet. Topping Whish up moves money out of it; withdrawing from Whish
  * moves it back in (Whish's withdrawal fee is lost money: it leaves the wallet and never reaches cash).
+ * Money taken out of savings lands in cash, so savings withdrawals add to it.
  * `whish` is the wallet's own balance, so balance + whish is everything you have.
  */
 export async function getBalance(bucket: R2Bucket): Promise<Balance> {
-  const [items, settings, whishDocument] = await Promise.all([
+  const [items, settings, whishDocument, savings] = await Promise.all([
     listTransactions(bucket),
     getSettings(bucket),
     readWhish(bucket),
+    listSavings(bucket),
   ]);
   let income = 0;
   let expenses = 0;
@@ -239,7 +241,8 @@ export async function getBalance(bucket: R2Bucket): Promise<Balance> {
   }
   const whish = whishBalance(whishDocument.items, items);
   const fees = whishFees(whishDocument.items);
-  return { income, expenses, whish, balance: settings.openingBalance + income - expenses - fees - whish };
+  const { withdrawn } = summarizeSavings(savings.items);
+  return { income, expenses, whish, balance: settings.openingBalance + income - expenses - fees - whish + withdrawn };
 }
 
 /* ---------------------------------------------------------------------------- recurring */

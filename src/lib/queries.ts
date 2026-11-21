@@ -103,7 +103,9 @@ export function useSaveSavings() {
   return useMutation({
     mutationFn: ({ id, input }: { id?: string; input: SavingsInput }) =>
       id ? api.updateSavings(id, input) : api.createSavings(input),
-    onSettled: () => qc.invalidateQueries({ queryKey: keys.savings }),
+    // Withdrawals land in cash, so the balance moves too.
+    onSettled: () =>
+      Promise.all([qc.invalidateQueries({ queryKey: keys.savings }), qc.invalidateQueries({ queryKey: keys.balance })]),
   });
 }
 
@@ -111,7 +113,9 @@ export function useDeleteSavings() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: api.deleteSavings,
-    onSettled: () => qc.invalidateQueries({ queryKey: keys.savings }),
+    // Withdrawals land in cash, so the balance moves too.
+    onSettled: () =>
+      Promise.all([qc.invalidateQueries({ queryKey: keys.savings }), qc.invalidateQueries({ queryKey: keys.balance })]),
   });
 }
 
